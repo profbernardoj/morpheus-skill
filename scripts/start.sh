@@ -2,11 +2,14 @@
 set -euo pipefail
 
 # Everclaw — Start Script
-# Securely launches the proxy-router by injecting the wallet key from 1Password at runtime.
+# Launches the proxy-router by injecting the wallet key from macOS Keychain at runtime.
+# Falls back to 1Password if Keychain entry not found (backward compatible).
 
 MORPHEUS_DIR="$HOME/morpheus"
 LOG_DIR="$MORPHEUS_DIR/data/logs"
 LOG_FILE="$LOG_DIR/router-stdout.log"
+KEYCHAIN_ACCOUNT="${EVERCLAW_KEYCHAIN_ACCOUNT:-everclaw-agent}"
+KEYCHAIN_SERVICE="${EVERCLAW_KEYCHAIN_SERVICE:-everclaw-wallet-key}"
 
 echo "♾️  Starting Everclaw (Morpheus proxy-router)..."
 
@@ -44,21 +47,39 @@ if [[ -z "${ETH_NODE_ADDRESS:-}" ]]; then
   exit 1
 fi
 
-# Retrieve wallet private key from 1Password (never stored on disk)
-echo "🔐 Retrieving wallet private key from 1Password..."
+# Retrieve wallet private key
+# Strategy: Try macOS Keychain first, then 1Password fallback
+echo "🔐 Retrieving wallet private key..."
 
-OP_TOKEN=$(security find-generic-password -a "${OP_KEYCHAIN_ACCOUNT:-op-agent}" -s "op-service-account-token" -w 2>/dev/null) || {
-  echo "❌ Could not retrieve 1Password service account token from keychain."
-  echo "   Expected keychain account: ${OP_KEYCHAIN_ACCOUNT:-op-agent}"
-  echo "   Expected keychain service: op-service-account-token"
-  exit 1
-}
+WALLET_PRIVATE_KEY=""
 
-WALLET_PRIVATE_KEY=$(OP_SERVICE_ACCOUNT_TOKEN="$OP_TOKEN" op item get "${OP_ITEM_NAME:-YOUR_ITEM_NAME}" --vault "${OP_VAULT_NAME:-YOUR_VAULT_NAME}" --fields "Private Key" --reveal 2>/dev/null) || {
-  echo "❌ Could not retrieve wallet private key from 1Password."
-  echo "   Set OP_ITEM_NAME and OP_VAULT_NAME environment variables, or edit this script."
-  exit 1
-}
+# Method 1: macOS Keychain (preferred — no external account needed)
+WALLET_PRIVATE_KEY=$(security find-generic-password -a "$KEYCHAIN_ACCOUNT" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null) || true
+
+if [[ -n "$WALLET_PRIVATE_KEY" ]]; then
+  echo "   ✓ Key loaded from macOS Keychain"
+else
+  # Method 2: 1Password fallback (backward compatible)
+  echo "   Keychain entry not found. Trying 1Password..."
+  OP_TOKEN=$(security find-generic-password -a "${OP_KEYCHAIN_ACCOUNT:-op-agent}" -s "op-service-account-token" -w 2>/dev/null) || true
+
+  if [[ -n "$OP_TOKEN" ]]; then
+    WALLET_PRIVATE_KEY=$(OP_SERVICE_ACCOUNT_TOKEN="$OP_TOKEN" op item get "${OP_ITEM_NAME:-YOUR_ITEM_NAME}" --vault "${OP_VAULT_NAME:-YOUR_VAULT_NAME}" --fields "Private Key" --reveal 2>/dev/null) || true
+  fi
+
+  if [[ -n "$WALLET_PRIVATE_KEY" ]]; then
+    echo "   ✓ Key loaded from 1Password"
+  else
+    echo "❌ Could not retrieve wallet private key."
+    echo ""
+    echo "   Set up a wallet with:"
+    echo "   node skills/everclaw/scripts/everclaw-wallet.mjs setup"
+    echo ""
+    echo "   Or import an existing key:"
+    echo "   node skills/everclaw/scripts/everclaw-wallet.mjs import-key <0xYOUR_KEY>"
+    exit 1
+  fi
+fi
 
 export WALLET_PRIVATE_KEY
 export ETH_NODE_ADDRESS

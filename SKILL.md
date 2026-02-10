@@ -1,13 +1,13 @@
 ---
 name: everclaw
-version: 0.3.0
-description: AI inference you own, forever powering your OpenClaw agents via the Morpheus decentralized network. Stake MOR tokens, access Kimi K2.5 and 10+ models, and maintain persistent inference by recycling staked MOR. Includes OpenAI-compatible proxy with auto-session management, Gateway Guardian watchdog, and bundled security skills for protecting agents that handle valuable tokens.
+version: 0.4.0
+description: AI inference you own, forever powering your OpenClaw agents via the Morpheus decentralized network. Stake MOR tokens, access Kimi K2.5 and 10+ models, and maintain persistent inference by recycling staked MOR. Includes OpenAI-compatible proxy with auto-session management, Gateway Guardian watchdog, bundled security skills, and zero-dependency wallet management via macOS Keychain.
 homepage: https://everclaw.com
 metadata:
   openclaw:
     emoji: "♾️"
     requires:
-      bins: ["curl", "op", "node"]
+      bins: ["curl", "node"]
     tags: ["inference", "everclaw", "morpheus", "mor", "decentralized", "ai", "blockchain", "base", "persistent", "fallback", "guardian", "security"]
 ---
 
@@ -416,7 +416,76 @@ See `references/troubleshooting.md` for a complete guide. Quick hits:
 
 ---
 
-## 11. OpenAI-Compatible Proxy (v0.2)
+## 11. Wallet Management (v0.4)
+
+Everclaw v0.4 includes a self-contained wallet manager that eliminates all external account dependencies. No 1Password, no Foundry, no Safe Wallet — just macOS Keychain and Node.js (already bundled with OpenClaw).
+
+### Setup (One Command)
+
+```bash
+node skills/everclaw/scripts/everclaw-wallet.mjs setup
+```
+
+This generates a new Ethereum wallet and stores the private key in your macOS Keychain (encrypted at rest, protected by your login password / Touch ID).
+
+### Import Existing Key
+
+```bash
+node skills/everclaw/scripts/everclaw-wallet.mjs import-key 0xYOUR_PRIVATE_KEY
+```
+
+### Check Balances
+
+```bash
+node skills/everclaw/scripts/everclaw-wallet.mjs balance
+```
+
+Shows ETH, MOR, USDC balances and MOR allowance for the Diamond contract.
+
+### Swap ETH/USDC for MOR
+
+```bash
+# Swap 0.05 ETH for MOR
+node skills/everclaw/scripts/everclaw-wallet.mjs swap eth 0.05
+
+# Swap 50 USDC for MOR
+node skills/everclaw/scripts/everclaw-wallet.mjs swap usdc 50
+```
+
+Executes onchain swaps via Uniswap V3 on Base. No external tools required — uses viem (bundled with OpenClaw).
+
+### Approve MOR for Staking
+
+```bash
+node skills/everclaw/scripts/everclaw-wallet.mjs approve
+```
+
+Approves the Morpheus Diamond contract to use your MOR for session staking.
+
+### Security Model
+
+- Private key stored in **macOS Keychain** (encrypted at rest)
+- Protected by your **login password / Touch ID**
+- Key is **injected at runtime** and immediately unset from environment
+- Key is **never written to disk** as a plaintext file
+- For advanced users: 1Password is supported as a fallback (backward compatible)
+
+### Full Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `setup` | Generate wallet, store in Keychain |
+| `address` | Show wallet address |
+| `balance` | Show ETH, MOR, USDC balances |
+| `swap eth <amount>` | Swap ETH → MOR via Uniswap V3 |
+| `swap usdc <amount>` | Swap USDC → MOR via Uniswap V3 |
+| `approve [amount]` | Approve MOR for Morpheus staking |
+| `export-key` | Print private key (use with caution) |
+| `import-key <0xkey>` | Import existing private key |
+
+---
+
+## 12. OpenAI-Compatible Proxy (v0.2)
 
 The Morpheus proxy-router requires custom auth (Basic auth via `.cookie`) and custom HTTP headers (`session_id`, `model_id`) that standard OpenAI clients don't support. Everclaw includes a lightweight proxy that bridges this gap.
 
@@ -502,7 +571,7 @@ curl http://127.0.0.1:8083/v1/chat/completions \
 
 ---
 
-## 12. OpenClaw Integration (v0.2)
+## 13. OpenClaw Integration (v0.2)
 
 Configure OpenClaw to use Morpheus as a **fallback provider** so your agent keeps running when primary API credits run out.
 
@@ -613,7 +682,7 @@ When your primary provider (e.g., Venice) returns billing/credit errors:
 
 ---
 
-## 13. Gateway Guardian (v0.2)
+## 14. Gateway Guardian (v0.2)
 
 A watchdog that monitors the OpenClaw gateway and restarts it if unresponsive. Runs every 2 minutes via launchd.
 
@@ -689,7 +758,7 @@ Edit variables at the top of `gateway-guardian.sh`:
 
 ---
 
-## 14. Security Skills (v0.3)
+## 15. Security Skills (v0.3)
 
 Everclaw agents handle MOR tokens and private keys — making them high-value targets. v0.3 bundles four security skills to defend against supply chain attacks, prompt injection, credential theft, and configuration exposure.
 

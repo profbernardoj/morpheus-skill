@@ -14,14 +14,26 @@ One command inside your OpenClaw workspace:
 git clone https://github.com/profbernardoj/everclaw.git ~/.openclaw/workspace/skills/everclaw
 ```
 
-Then set up the proxy and guardian:
+Then set up your wallet, proxy, and guardian:
 
 ```bash
+# Step 1: Install the Morpheus proxy-router
 bash ~/.openclaw/workspace/skills/everclaw/scripts/install.sh
+
+# Step 2: Create your wallet (stored in macOS Keychain — no external accounts)
+node ~/.openclaw/workspace/skills/everclaw/scripts/everclaw-wallet.mjs setup
+
+# Step 3: Send ETH to the wallet address shown above, then swap for MOR
+node ~/.openclaw/workspace/skills/everclaw/scripts/everclaw-wallet.mjs swap eth 0.05
+
+# Step 4: Approve MOR for staking
+node ~/.openclaw/workspace/skills/everclaw/scripts/everclaw-wallet.mjs approve
+
+# Step 5: Install the proxy and guardian (auto-starts on boot)
 bash ~/.openclaw/workspace/skills/everclaw/scripts/install-proxy.sh
 ```
 
-That's it. Your agent now has a fallback inference provider that runs on decentralized infrastructure.
+That's it. Your agent now has a fallback inference provider that runs on decentralized infrastructure. No API keys, no external accounts, no subscriptions.
 
 ---
 
@@ -155,10 +167,13 @@ When a session ends, your MOR comes back. Open a new session with the same token
 |--------|---------|
 | Install Everclaw | `git clone https://github.com/profbernardoj/everclaw.git ~/.openclaw/workspace/skills/everclaw` |
 | Install router | `bash skills/everclaw/scripts/install.sh` |
+| Create wallet | `node scripts/everclaw-wallet.mjs setup` |
+| Check balance | `node scripts/everclaw-wallet.mjs balance` |
+| Swap ETH→MOR | `node scripts/everclaw-wallet.mjs swap eth 0.05` |
+| Swap USDC→MOR | `node scripts/everclaw-wallet.mjs swap usdc 50` |
+| Approve MOR | `node scripts/everclaw-wallet.mjs approve` |
 | Install proxy + guardian | `bash skills/everclaw/scripts/install-proxy.sh` |
 | Start router | `bash skills/everclaw/scripts/start.sh` |
-| Swap ETH→MOR | `bash skills/everclaw/scripts/swap.sh eth 0.01` |
-| Check balance | `bash skills/everclaw/scripts/balance.sh` |
 | Proxy health | `curl http://127.0.0.1:8083/health` |
 | Scan a skill | `node security/skillguard/src/cli.js scan <path>` |
 | Security audit | `bash security/clawdstrike/scripts/collect_verified.sh` |
@@ -169,10 +184,11 @@ When a session ends, your MOR comes back. Open a new session with the same token
 ## Requirements
 
 - **OpenClaw** — installed and running
-- **Node.js** — v20+
-- **MOR tokens** — on Base network (50+ MOR recommended)
-- **ETH on Base** — small amount for gas (~0.005 ETH covers months)
-- **1Password CLI** — for secure key management (recommended)
+- **Node.js** — v20+ (bundled with OpenClaw)
+- **ETH or USDC on Base** — to swap for MOR tokens
+- **macOS** — for Keychain wallet storage (v0.4+)
+
+That's it. No external accounts. No API keys. No subscriptions.
 
 ---
 
