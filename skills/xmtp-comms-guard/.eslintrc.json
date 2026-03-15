@@ -1,0 +1,11 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "rules": {
+    "no-restricted-imports": ["error", {
+      "paths": [{
+        "name": "@xmtp/client",
+        "message": "Use createGuardedXmtpClient from xmtp-comms-guard instead"
+      }]
+    }]
+  }
+}

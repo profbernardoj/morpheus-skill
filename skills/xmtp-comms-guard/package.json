@@ -1,0 +1,45 @@
+{
+  "name": "xmtp-comms-guard",
+  "version": "6.0.0",
+  "description": "XMTP V6 Trust Framework — deterministic sovereign agent-to-agent communication (EverClaw/OpenClaw)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint . --ext .ts",
+    "scan": "node ../../security/skillguard/src/cli.js scan .",
+    "test": "npx tsx --test test/adversarial/basic.test.ts"
+  },
+  "dependencies": {
+    "@xmtp/agent-sdk": "^2.3.0",
+    "commander": "^12.1.0",
+    "json-stable-stringify": "^1.1.1",
+    "lru-cache": "^10.4.3",
+    "uuid": "^9.0.0",
+    "zod": "^3.23.8"
+  },
+  "peerDependencies": {
+    "@xmtp/client": "^2.x",
+    "bagman": "*",
+    "pii-guard": "*",
+    "prompt-guard": "*"
+  },
+  "peerDependenciesMeta": {
+    "@xmtp/client": {
+      "optional": true
+    },
+    "bagman": {
+      "optional": true
+    },
+    "pii-guard": {
+      "optional": true
+    },
+    "prompt-guard": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.57.0",
+    "typescript": "^5.9.3"
+  }
+}
