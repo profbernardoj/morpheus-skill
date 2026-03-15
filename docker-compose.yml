@@ -18,7 +18,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        EVERCLAW_VERSION: "2026.3.17"
+        EVERCLAW_VERSION: "2026.3.18"
     container_name: everclaw
     restart: unless-stopped
     ports:
