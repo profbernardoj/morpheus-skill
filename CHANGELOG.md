@@ -11,6 +11,9 @@ All notable changes to EverClaw are documented here.
   - Result: Model list now refreshes correctly, showing 40 models including GLM-5
   - Backwards compatible — handles both array and object formats
 
+### Changed
+- Docker image version bumped to 2026.3.19
+
 ---
 
 ## [2026.3.18] - 2026-03-15
