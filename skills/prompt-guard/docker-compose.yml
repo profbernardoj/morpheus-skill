@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  prompt-guard:
+    build: .
+    container_name: prompt-guard
+    ports:
+      - "8080:8080"
+    environment:
+      - LOG_LEVEL=info
+      - CONFIG_PATH=/app/config.yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

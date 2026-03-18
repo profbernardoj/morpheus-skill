@@ -1,0 +1,25 @@
+{
+  "name": "@everclaw/agent-chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "XMTP real-time always-on messaging skill for EverClaw",
+  "main": "./src/index.mjs",
+  "bin": {
+    "agent-chat": "./cli.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/**/*.test.mjs"
+  },
+  "dependencies": {
+    "@xmtp/agent-sdk": "^2.3.0",
+    "viem": "^2.21.0",
+    "uuid": "^9.0.0"
+  },
+  "peerDependencies": {
+    "xmtp-comms-guard": "^6.0.0"
+  }
+}

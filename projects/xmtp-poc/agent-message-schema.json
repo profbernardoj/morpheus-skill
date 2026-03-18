@@ -1,0 +1,219 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EverClaw Agent-to-Agent Message Protocol",
+  "description": "JSON message format for XMTP-based agent communication — V3 Trust Framework",
+  "version": "4.0",
+  "type": "object",
+  "required": ["messageType", "version", "payload", "topics", "sensitivity", "intent", "correlationId", "timestamp", "nonce"],
+  "properties": {
+    "messageType": {
+      "type": "string",
+      "enum": ["HANDSHAKE", "RESPONSE", "COMMAND", "DATA", "BYE", "INTRODUCTION"],
+      "description": "Message classification"
+    },
+    "version": {
+      "type": "string",
+      "const": "3.0",
+      "description": "Protocol version"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Message content — varies by messageType",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/handshakePayload" },
+        { "$ref": "#/definitions/responsePayload" },
+        { "$ref": "#/definitions/commandPayload" },
+        { "$ref": "#/definitions/dataPayload" },
+        { "$ref": "#/definitions/byePayload" },
+        { "$ref": "#/definitions/introductionPayload" }
+      ]
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "everclaw", "smartagent", "morpheus", "github", "infrastructure",
+          "family", "health", "portfolio", "general", "public-projects"
+        ]
+      },
+      "minItems": 1,
+      "description": "Topic ontology tags for trust boundary enforcement"
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": ["public", "guarded", "technical", "personal", "financial"],
+      "description": "Information sensitivity level"
+    },
+    "intent": {
+      "type": "string",
+      "enum": ["query", "update", "introduce", "handshake", "revoke", "status"],
+      "description": "Message intent for trust boundary classification"
+    },
+    "correlationId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Links responses to originating messages (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when message was created"
+    },
+    "nonce": {
+      "type": "string",
+      "minLength": 32,
+      "description": "Base64-encoded 32-byte random nonce for replay protection"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]+$",
+      "description": "EIP-191 signature binding all fields"
+    }
+  },
+
+  "definitions": {
+    "handshakePayload": {
+      "type": "object",
+      "required": ["challenge"],
+      "properties": {
+        "challenge": {
+          "type": "object",
+          "required": ["conversationId", "timestamp", "nonce", "version"],
+          "properties": {
+            "conversationId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "nonce": { "type": "string", "minLength": 32 },
+            "version": { "type": "string", "const": "3.0" }
+          }
+        },
+        "challengeSignature": {
+          "type": "string",
+          "description": "EIP-191 signature of the challenge (conversationId+timestamp+nonce+version)"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "agentId": { "type": "string" },
+        "walletAddress": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        }
+      }
+    },
+
+    "responsePayload": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["SUCCESS", "ERROR", "TIMEOUT", "REJECTED"]
+        },
+        "result": { "type": "object", "additionalProperties": true },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": { "type": "string" },
+            "message": { "type": "string" }
+          }
+        },
+        "challengeResponse": {
+          "type": "string",
+          "description": "EIP-191 counter-signature for handshake verification"
+        }
+      }
+    },
+
+    "commandPayload": {
+      "type": "object",
+      "required": ["action", "parameters"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "skill.invoke", "skill.list",
+            "memory.search", "agent.status", "agent.ping"
+          ]
+        },
+        "parameters": { "type": "object", "additionalProperties": true },
+        "timeout": { "type": "integer", "minimum": 1000, "default": 30000 },
+        "awaitResult": { "type": "boolean", "default": true }
+      }
+    },
+
+    "dataPayload": {
+      "type": "object",
+      "required": ["contentType", "data"],
+      "properties": {
+        "contentType": {
+          "type": "string",
+          "description": "MIME type or structured type identifier"
+        },
+        "data": { "type": "object", "additionalProperties": true },
+        "encoding": {
+          "type": "string",
+          "enum": ["json", "base64"],
+          "default": "json"
+        }
+      }
+    },
+
+    "byePayload": {
+      "type": "object",
+      "required": ["reason"],
+      "properties": {
+        "reason": { "type": "string" },
+        "revocationReceipt": {
+          "type": "string",
+          "description": "Signed revocation receipt for audit trail"
+        }
+      }
+    },
+
+    "introductionPayload": {
+      "type": "object",
+      "required": ["introducedAgent", "introducedAddress"],
+      "properties": {
+        "introducedAgent": { "type": "string" },
+        "introducedAddress": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        },
+        "introducerTrustLevel": {
+          "type": "integer",
+          "minimum": 6,
+          "description": "Introducer must be trust >= 6"
+        },
+        "reason": { "type": "string" }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "messageType": "HANDSHAKE",
+      "version": "4.0",
+      "payload": {
+        "challenge": {
+          "conversationId": "conv-abc-123",
+          "timestamp": "2026-03-14T20:00:00Z",
+          "nonce": "dGVzdG5vbmNlYmFzZTY0c3RyaW5nMTIzNDU2Nzg5MA==",
+          "version": "4.0"
+        },
+        "challengeSignature": "0x...",
+        "agentId": "morpheusai",
+        "walletAddress": "0x528DC1C6A154A88730cE6314C4AcB6f7628F3Cf4",
+        "capabilities": ["xmtp.v3", "command.exec", "skill.mgmt"]
+      },
+      "topics": ["everclaw", "infrastructure"],
+      "sensitivity": "technical",
+      "intent": "handshake",
+      "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+      "timestamp": "2026-03-14T20:00:00Z",
+      "nonce": "dGVzdG5vbmNlYmFzZTY0c3RyaW5nMTIzNDU2Nzg5MA=="
+    }
+  ]
+}
