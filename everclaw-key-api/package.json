@@ -9,15 +9,23 @@
     "dev": "node --watch server.js",
     "test": "node --test"
   },
-  "keywords": ["everclaw", "api", "keys", "morpheus", "bootstrap", "faucet"],
+  "keywords": [
+    "everclaw",
+    "api",
+    "keys",
+    "morpheus",
+    "bootstrap",
+    "faucet"
+  ],
   "author": "EverClaw",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.21.0",
+    "@upstash/redis": "^1.37.0",
     "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
+    "express": "^4.21.0",
     "helmet": "^8.0.0",
-    "viem": "^2.0.0",
-    "redis": "^4.6.0"
+    "redis": "^4.7.1",
+    "viem": "^2.47.5"
   }
 }

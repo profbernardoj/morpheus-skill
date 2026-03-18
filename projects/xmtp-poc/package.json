@@ -1,0 +1,18 @@
+{
+  "name": "xmtp-poc",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "XMTP agent-to-agent messaging PoC for EverClaw",
+  "scripts": {
+    "keygen": "node keygen.mjs",
+    "send": "node send.mjs",
+    "receive": "node receive.mjs",
+    "test": "node test-roundtrip.mjs"
+  },
+  "dependencies": {
+    "@xmtp/content-type-text": "^2.0.0",
+    "@xmtp/node-sdk": "^6.0.0",
+    "viem": "^2.0.0"
+  }
+}

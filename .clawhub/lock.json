@@ -16,6 +16,10 @@
     "everclaw": {
       "version": "0.3.3",
       "installedAt": 1770870533736
+    },
+    "xmtp": {
+      "version": "0.1.0",
+      "installedAt": 1773776872193
     }
   }
 }

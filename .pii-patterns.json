@@ -1,0 +1,85 @@
+{
+  "version": 2,
+  "description": "PII patterns for PII Guard V2. NEVER commit this file.",
+  "updated": "2026-02-25",
+  "names": [
+    "David Johnston",
+    "Cayla Johnston",
+    "Bernardo Johnston",
+    "Savannah Johnston",
+    "Sydney Johnston",
+    "Sofia Johnston",
+    "Daniel Johnston",
+    "Leia Johnston",
+    "Andrew Johnston",
+    "David A. Johnston",
+    "David A Johnston"
+  ],
+  "first_names": [
+    "Cayla",
+    "Savannah",
+    "Sydney",
+    "Sofia",
+    "Daniel",
+    "Leia",
+    "Andrew"
+  ],
+  "emails": [
+    "DJohnstonEC@gmail.com",
+    "DJohnstonEC@protonmail.com",
+    "BernardoJohnston@Proton.me",
+    "BernardoJohnston@proton.me",
+    "bernardo@Mac.lan"
+  ],
+  "phones": [
+    "+14432859111",
+    "14432859111",
+    "443-285-9111",
+    "(443) 285-9111",
+    "+15129488566",
+    "15129488566",
+    "512-948-8566",
+    "(512) 948-8566"
+  ],
+  "wallets": [
+    "0x9ac558D434F6Cb87576BfA4A03deCC41BF35E533"
+  ],
+  "organizations": [
+    "Crossroads Church Austin",
+    "Crossroads Church"
+  ],
+  "people": [
+    "Jim Baker",
+    "Stephen Hanlon",
+    "Teana Baker-Taylor",
+    "Thomas Borrel"
+  ],
+  "websites": [
+    "davidajohnston.me",
+    "savannahstuff.me",
+    "johnstonslaw.org",
+    "freemansjourney.com",
+    "voluntarist.co",
+    "journeytofreedom.me"
+  ],
+  "location_signals": [
+    "Round Rock ISD",
+    "RRISD",
+    "Round Rock",
+    "Cedar Park",
+    "Pflugerville"
+  ],
+  "keywords": [
+    "Bernardo Agent Vault",
+    "bernardo-agent"
+  ],
+  "regex": [
+    "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+    "\\b\\d{4}[- ]?\\d{4}[- ]?\\d{4}[- ]?\\d{4}\\b"
+  ],
+  "blocked_paths": [
+    "memory/daily/",
+    "memory/reference/family-reminders",
+    "memory/reference/school-calendar"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "xmtp": {
+    "network": "production",
+    "dbPath": "~/.everclaw/xmtp",
+    "consentPolicy": "handshake",
+    "bridge": {
+      "outboxDir": "~/.everclaw/xmtp/outbox",
+      "inboxDir": "~/.everclaw/xmtp/inbox",
+      "pollIntervalMs": 50
+    },
+    "health": {
+      "updateIntervalMs": 5000
+    },
+    "reconnect": {
+      "maxBackoffMs": 30000
+    }
+  }
+}

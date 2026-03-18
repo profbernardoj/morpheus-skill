@@ -1,0 +1,4 @@
+node_modules/
+identities/*.json
+*.db
+*.db-journal
