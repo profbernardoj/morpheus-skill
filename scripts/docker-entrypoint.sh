@@ -32,12 +32,31 @@ if [ ! -f "$CONFIG_FILE" ]; then
   echo "   Config: $CONFIG_FILE"
 fi
 
-# Copy boot file templates if workspace is empty
+# ─── Template Placeholder Values ─────────────────────────────────────────────
+# Resolve placeholder values from env vars with sensible defaults.
+# These are substituted into boot templates during first-run scaffold.
+TPL_AGENT_NAME="${EVERCLAW_AGENT_NAME:-EverClaw}"
+TPL_AGENT_VIBE="${EVERCLAW_AGENT_VIBE:-Resourceful, direct, always shipping}"
+TPL_USER_NAME="${EVERCLAW_USER_NAME:-User}"
+TPL_USER_DISPLAY_NAME="${EVERCLAW_USER_DISPLAY_NAME:-$TPL_USER_NAME}"
+TPL_USER_TIMEZONE="${TZ:-UTC}"
+TPL_PROXY_PORT="${EVERCLAW_PROXY_PORT:-8083}"
+TPL_DEFAULT_MODEL="${EVERCLAW_DEFAULT_MODEL:-glm-5}"
+
+# Copy boot file templates if workspace is empty, substituting placeholders
 for template in AGENTS SOUL USER IDENTITY HEARTBEAT TOOLS; do
   target="${WORKSPACE}/${template}.md"
   source="${SKILLS_DIR}/templates/boot/${template}.template.md"
   if [ ! -f "$target" ] && [ -f "$source" ]; then
-    cp "$source" "$target"
+    sed \
+      -e "s|__AGENT_NAME__|${TPL_AGENT_NAME}|g" \
+      -e "s|__AGENT_VIBE__|${TPL_AGENT_VIBE}|g" \
+      -e "s|__USER_NAME__|${TPL_USER_NAME}|g" \
+      -e "s|__USER_DISPLAY_NAME__|${TPL_USER_DISPLAY_NAME}|g" \
+      -e "s|__USER_TIMEZONE__|${TPL_USER_TIMEZONE}|g" \
+      -e "s|__MORPHEUS_PROXY_PORT__|${TPL_PROXY_PORT}|g" \
+      -e "s|__DEFAULT_MODEL__|${TPL_DEFAULT_MODEL}|g" \
+      "$source" > "$target"
     echo "   Scaffolded: ${template}.md"
   fi
 done

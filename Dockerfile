@@ -28,6 +28,11 @@
 #   OPENCLAW_GATEWAY_TOKEN    — Auth token for the web UI (auto-generated if not set)
 #   MORPHEUS_GATEWAY_API_KEY  — Morpheus API Gateway key (get free at https://app.mor.org)
 #   MORPHEUS_PROXY_API_KEY    — Bearer token for local Morpheus proxy-router
+#   EVERCLAW_AGENT_NAME       — Agent display name (default: EverClaw)
+#   EVERCLAW_USER_NAME        — Your name (default: User)
+#   EVERCLAW_USER_DISPLAY_NAME — How the agent addresses you (default: same as USER_NAME)
+#   TZ                        — Timezone for the agent (default: UTC, e.g. America/New_York)
+#   EVERCLAW_DEFAULT_MODEL    — Default AI model (default: glm-5)
 #   EVERCLAW_AUTH_TOKEN       — Legacy alias for proxy auth (default: morpheus-local)
 #   WALLET_PRIVATE_KEY        — For local P2P staking (optional, use secrets in production)
 #   OPENCLAW_ENABLE_DEVICE_AUTH=true — Re-enable device auth (default: disabled for containers)
