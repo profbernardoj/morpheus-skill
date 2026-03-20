@@ -8,7 +8,7 @@ Always-on daemon providing E2E-encrypted messaging via XMTP's MLS protocol. Runs
 
 ## Version
 
-0.1.0
+0.2.0
 
 ## Dependencies
 
@@ -61,6 +61,94 @@ XMTP wallet is messaging-only — no funds. Separate from MOR staking wallet.
 | `src/groups.mjs` | Group conversation mapping |
 | `src/payer.mjs` | Fee stub (network currently free) |
 | `src/index.mjs` | Public API re-exports |
+
+## Daemon Management
+
+The agent-chat daemon runs as a user-level service (no sudo required):
+
+- **macOS**: launchd (`~/Library/LaunchAgents/com.everclaw.agent-chat.plist`)
+- **Linux**: systemd user service (`~/.config/systemd/user/everclaw-agent-chat.service`)
+
+### Setup
+
+```bash
+# Auto-detect OS and install daemon
+bash scripts/setup-agent-chat.sh
+
+# Or specify OS explicitly
+bash scripts/setup-agent-chat.sh --macos
+bash scripts/setup-agent-chat.sh --linux
+```
+
+### Commands
+
+```bash
+# Check daemon status
+bash scripts/setup-agent-chat.sh --status
+
+# View daemon logs
+bash scripts/setup-agent-chat.sh --logs
+
+# Restart daemon
+bash scripts/setup-agent-chat.sh --restart
+
+# Uninstall daemon
+bash scripts/setup-agent-chat.sh --uninstall
+
+# Preview without changes
+bash scripts/setup-agent-chat.sh --dry-run
+
+# Help
+bash scripts/setup-agent-chat.sh --help
+```
+
+### Manual Control
+
+**macOS (launchd):**
+```bash
+# Status
+launchctl list | grep everclaw
+
+# Stop
+launchctl bootout gui/$(id -u)/com.everclaw.agent-chat
+
+# Start
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.everclaw.agent-chat.plist
+
+# Logs
+tail -f ~/.everclaw/logs/agent-chat.log
+```
+
+**Linux (systemd):**
+```bash
+# Status
+systemctl --user status everclaw-agent-chat
+
+# Stop
+systemctl --user stop everclaw-agent-chat
+
+# Start
+systemctl --user start everclaw-agent-chat
+
+# Logs
+journalctl --user -u everclaw-agent-chat -f
+```
+
+### Logs and Health
+
+- **Logs**: `~/.everclaw/logs/agent-chat.log` (macOS) or `journalctl --user -u everclaw-agent-chat` (Linux)
+- **Health file**: `~/.everclaw/xmtp/health.json`
+- **Identity**: `~/.everclaw/xmtp/` (chmod 700)
+
+### First-Time Setup
+
+Before starting the daemon, generate your XMTP identity:
+
+```bash
+node skills/agent-chat/setup-identity.mjs
+```
+
+This creates the messaging-only wallet in `~/.everclaw/xmtp/` (separate from your MOR staking wallet).
 
 ## Security
 

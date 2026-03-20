@@ -29,25 +29,52 @@ This creates:
 
 ## Running
 
+### Automatic Setup (recommended)
+
+The daemon runs as a user-level service (no sudo required):
+
+```bash
+# Auto-detect OS and install
+bash scripts/setup-agent-chat.sh
+```
+
+**What this does:**
+- Detects macOS or Linux
+- Installs launchd plist or systemd user service
+- Substitutes paths (handles nvm/brew/Node path variations)
+- Sets proper permissions on `~/.everclaw/xmtp/`
+- Starts the daemon immediately
+
+### Commands
+
+```bash
+bash scripts/setup-agent-chat.sh --status    # Check if running
+bash scripts/setup-agent-chat.sh --logs      # Tail logs
+bash scripts/setup-agent-chat.sh --restart   # Restart daemon
+bash scripts/setup-agent-chat.sh --uninstall # Remove service
+```
+
 ### Foreground (testing)
 ```bash
 node skills/agent-chat/daemon.mjs
 ```
 
-### macOS (launchd)
+### Manual Control
+
+**macOS (launchd):**
 ```bash
-# Copy and customize the plist template
-cp skills/agent-chat/templates/launchd/com.everclaw.agent-chat.plist ~/Library/LaunchAgents/
-# Replace {{NODE_BIN}} and {{EVERCLAW_PATH}} placeholders
-launchctl load ~/Library/LaunchAgents/com.everclaw.agent-chat.plist
+launchctl list | grep everclaw                        # Status
+launchctl bootout gui/$(id -u)/com.everclaw.agent-chat  # Stop
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.everclaw.agent-chat.plist  # Start
+tail -f ~/.everclaw/logs/agent-chat.log               # Logs
 ```
 
-### Linux (systemd)
+**Linux (systemd):**
 ```bash
-# Copy and customize the service template
-sudo cp skills/agent-chat/templates/systemd/everclaw-agent-chat.service /etc/systemd/system/
-# Replace {{NODE_BIN}}, {{EVERCLAW_PATH}}, {{INSTALL_USER}} placeholders
-sudo systemctl enable --now everclaw-agent-chat
+systemctl --user status everclaw-agent-chat    # Status
+systemctl --user stop everclaw-agent-chat       # Stop
+systemctl --user start everclaw-agent-chat      # Start
+journalctl --user -u everclaw-agent-chat -f     # Logs
 ```
 
 ## CLI

@@ -281,6 +281,28 @@ else
   echo "   Run 'openclaw onboard' first, then re-run this installer."
 fi
 
+# --- Optional: Agent-Chat XMTP Daemon ---
+AGENT_CHAT_SKILL="$OPENCLAW_DIR/workspace/skills/agent-chat"
+if [[ -d "$AGENT_CHAT_SKILL" ]] && [[ -f "$AGENT_CHAT_SKILL/daemon.mjs" ]]; then
+  echo ""
+  echo "💬 Setting up agent-chat XMTP daemon..."
+  
+  if [[ -f "$SCRIPT_DIR/setup-agent-chat.sh" ]]; then
+    # Run with --skip-deps since we already checked Node and deps
+    bash "$SCRIPT_DIR/setup-agent-chat.sh" --skip-deps 2>&1 | tail -10 || {
+      echo "   ⚠️  Agent-chat daemon setup had issues — not critical"
+      echo "      Run manually: bash scripts/setup-agent-chat.sh"
+    }
+  else
+    echo "   ⚠️  setup-agent-chat.sh not found — skipping"
+    echo "      Agent-chat skill is installed but daemon not configured"
+  fi
+else
+  echo ""
+  echo "💬 Agent-chat skill not installed — skipping XMTP daemon setup"
+  echo "   Install with: clawhub install agent-chat"
+fi
+
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║  Installation complete!                  ║"

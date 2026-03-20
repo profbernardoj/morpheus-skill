@@ -876,6 +876,17 @@ if [[ "$CONFIG_MERGED" != true ]]; then
   echo ""
 fi
 
+# --- Optional: Agent-Chat XMTP Daemon ---
+AGENT_CHAT_SKILL="$INSTALL_DIR/skills/agent-chat"
+if [[ -d "$AGENT_CHAT_SKILL" ]] && [[ -f "$AGENT_CHAT_SKILL/daemon.mjs" ]] && [[ -f "$INSTALL_DIR/scripts/setup-agent-chat.sh" ]]; then
+  echo ""
+  log "💬 Setting up agent-chat XMTP daemon..."
+  bash "$INSTALL_DIR/scripts/setup-agent-chat.sh" --skip-deps 2>&1 | tail -10 || {
+    log_warn "Agent-chat daemon setup had issues — not critical"
+    log "      Run manually: bash scripts/setup-agent-chat.sh"
+  }
+fi
+
 echo -e "${BOLD}  Useful commands:${NC}"
 echo ""
 log "Test inference:   node $INSTALL_DIR/scripts/bootstrap-everclaw.mjs --test"

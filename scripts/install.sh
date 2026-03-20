@@ -281,6 +281,17 @@ else
   echo "     node scripts/bootstrap-everclaw.mjs"
 fi
 
+# --- Optional: Agent-Chat XMTP Daemon ---
+AGENT_CHAT_SKILL="$SCRIPT_DIR/../skills/agent-chat"
+if [[ -d "$AGENT_CHAT_SKILL" ]] && [[ -f "$AGENT_CHAT_SKILL/daemon.mjs" ]] && [[ -f "$SCRIPT_DIR/setup-agent-chat.sh" ]]; then
+  echo ""
+  echo "💬 Setting up agent-chat XMTP daemon..."
+  bash "$SCRIPT_DIR/setup-agent-chat.sh" --skip-deps 2>&1 | tail -10 || {
+    echo "   ⚠️  Agent-chat daemon setup had issues — not critical"
+    echo "      Run manually: bash scripts/setup-agent-chat.sh"
+  }
+fi
+
 echo ""
 echo "Everclaw (Morpheus Lumerin Node) installed to ${INSTALL_DIR}"
 echo ""

@@ -5,16 +5,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User={{INSTALL_USER}}
 WorkingDirectory={{EVERCLAW_PATH}}
-ExecStart={{NODE_BIN}} {{EVERCLAW_PATH}}/skills/agent-chat/daemon.mjs
+ExecStart={{NODE_BIN}} {{DAEMON_PATH}}
 Restart=on-failure
 RestartSec=10
 Environment=NODE_ENV=production
 
+# Logs to user journal (view with: journalctl --user -u everclaw-agent-chat)
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=everclaw-agent-chat
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
