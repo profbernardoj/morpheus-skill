@@ -270,6 +270,28 @@ print(ts)
   else
     pass "timeoutSeconds=${timeout_check}s (sufficient for Morpheus Gateway)"
   fi
+
+  # A9: Is streaming enabled on model definitions?
+  local non_streaming
+  non_streaming=$(python3 -c "
+import json
+c = json.load(open('$OPENCLAW_CONFIG'))
+count = 0
+for p in c.get('models',{}).get('providers',{}).values():
+    for m in p.get('models',[]):
+        if m.get('streaming') is not True:
+            count += 1
+print(count)
+" 2>/dev/null || echo "-1")
+
+  if [[ "$non_streaming" -gt 0 ]]; then
+    fail "${non_streaming} model(s) missing streaming=true — causes timeouts on slow P2P connections"
+    fix "Streaming keeps connections alive once tokens start flowing"
+    fix "Run: node scripts/setup.mjs --apply (auto-enables streaming)"
+    fix "Or manually add \"streaming\": true to each model in openclaw.json"
+  elif [[ "$non_streaming" -eq 0 ]]; then
+    pass "All models have streaming enabled"
+  fi
 }
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -2,6 +2,15 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.3.20.1625] - 2026-03-20
+
+### Fixed
+- **Streaming enabled on all model definitions** — Without `"streaming": true`, OpenClaw sends non-streaming requests and waits for the complete response before any data arrives. With Morpheus P2P provider discovery taking 30-120s, connections sit idle and hit timeout even with `timeoutSeconds: 300`. Streaming keeps the connection alive once the first token arrives. Fix:
+  - All 3 config templates now include `"streaming": true` on every model definition (19 models)
+  - `setup.mjs` auto-enables streaming on all model definitions during config merge (catches existing installs)
+  - `diagnose.sh` new check A9: flags models missing `streaming=true` as FAIL with fix instructions
+  - Credit: Thomas (ClawBox) identified the root cause
+
 ## [2026.3.20.1442] - 2026-03-20
 
 ### Fixed

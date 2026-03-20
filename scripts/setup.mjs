@@ -210,6 +210,28 @@ function mergeConfig(existing, template) {
     console.log(`  ℹ️  timeoutSeconds already ${currentTimeout}s (user value preserved)`);
   }
 
+  // === STREAMING COMPATIBILITY (v2026.3.20+) ===
+  // Enable streaming on all model definitions. Without streaming, OpenClaw waits
+  // for the complete response before any data arrives. With Morpheus P2P provider
+  // discovery taking 30-120s, non-streaming requests often hit timeout before the
+  // first token arrives. Streaming keeps the connection alive once tokens start flowing.
+  if (merged.models?.providers) {
+    let streamingFixed = 0;
+    for (const [provName, prov] of Object.entries(merged.models.providers)) {
+      if (Array.isArray(prov.models)) {
+        for (const m of prov.models) {
+          if (m.streaming !== true) {
+            m.streaming = true;
+            streamingFixed++;
+          }
+        }
+      }
+    }
+    if (streamingFixed > 0) {
+      console.log(`  ✅ Enabled streaming on ${streamingFixed} model(s) — prevents timeout on slow P2P connections`);
+    }
+  }
+
   return merged;
 }
 

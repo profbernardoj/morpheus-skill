@@ -4,7 +4,7 @@
     "This template configures Morpheus inference for your OpenClaw agent on Linux.",
     "IMPORTANT: 'everclaw' is a SKILL (tooling), NOT a provider.",
     "Valid model prefixes: 'morpheus/' (local P2P) or 'mor-gateway/' (API Gateway).",
-    "NEVER use 'everclaw/' as a model prefix — it will route to Venice and cause billing errors.",
+    "NEVER use 'everclaw/' as a model prefix \u2014 it will route to Venice and cause billing errors.",
     "On Linux, use systemd instead of launchd for service management.",
     "Wallet key storage: use environment variables or a secrets manager (no macOS Keychain)."
   ],
@@ -34,8 +34,16 @@
             "id": "glm-5",
             "name": "GLM-5 (via Morpheus Gateway)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           },
@@ -43,8 +51,16 @@
             "id": "kimi-k2.5",
             "name": "Kimi K2.5 (via Morpheus Gateway)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           },
@@ -52,8 +68,16 @@
             "id": "glm-4.7-flash",
             "name": "GLM 4.7 Flash (via Morpheus Gateway)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           }
@@ -69,8 +93,16 @@
             "_note": "Auto-selected by setup-ollama.sh based on your hardware. Replace with your actual model.",
             "name": "Qwen3.5 9B (Local Ollama)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192
           }
@@ -85,8 +117,16 @@
             "id": "glm-5",
             "name": "GLM-5 (via Morpheus P2P)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           },
@@ -94,8 +134,16 @@
             "id": "kimi-k2.5",
             "name": "Kimi K2.5 (via Morpheus P2P)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           },
@@ -103,8 +151,16 @@
             "id": "glm-4.7-flash",
             "name": "GLM 4.7 Flash (via Morpheus P2P)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           },
@@ -112,8 +168,16 @@
             "id": "kimi-k2-thinking",
             "name": "Kimi K2 Thinking (via Morpheus P2P)",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "streaming": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 131072,
             "maxTokens": 8192
           }
