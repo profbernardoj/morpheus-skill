@@ -131,11 +131,16 @@ sync_remote() {
     push_args=("--no-verify" "--force" "$remote" "$BRANCH")
   fi
 
-  if git push "${push_args[@]}" 2>&1 | tail -1; then
+  local push_output
+  if push_output=$(git push "${push_args[@]}" 2>&1); then
+    # Show last line of output (e.g. "abcdef0..1234567  main -> main")
+    [[ -n "$push_output" ]] && echo "$push_output" | tail -1
     SUCCEEDED+=("$remote")
     printf "  ✅ %-25s pushed\n" "$remote"
     return 0
   else
+    # Show full error for debugging
+    [[ -n "$push_output" ]] && echo "$push_output" | tail -3
     FAILED+=("$remote")
     printf "  ❌ %-25s FAILED\n" "$remote"
     return 1
