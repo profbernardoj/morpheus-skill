@@ -19,6 +19,7 @@ All notable changes to EverClaw are documented here.
   - MiniMax M2.7 and updated GLM catalog metadata
   - License unchanged: MIT (Peter Steinberger)
 - **Dockerfile** — `OPENCLAW_VERSION` bumped from `v2026.3.13-1` to `v2026.3.22`
+- **SKILL.md** — Version aligned to `2026.3.23.1800` (fix: version-stamp.sh missed this file)
 
 ## [2026.3.20.1950] - 2026-03-20
 
