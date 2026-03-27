@@ -90,7 +90,7 @@ jobs:
           DOCKER_BUILDKIT: "1"
 
       - name: Basic container smoke test
-        run: docker run --rm everclaw-test node --check scripts/setup.mjs
+        run: docker run --rm everclaw-test node --check /home/node/.openclaw/workspace/skills/everclaw/scripts/setup.mjs
 
 permissions:
   contents: read
