@@ -2,6 +2,35 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.3.31] - 2026-03-31
+
+### Added
+- **Backup & Restore System** — Comprehensive disaster recovery with AGE-encrypted backups
+  - `everclaw-export.mjs` (781 lines) — Encrypted backup creation with Docker support
+  - `everclaw-restore.mjs` (1131 lines) — Restore with pre-restore backup and rollback
+  - `everclaw-verify.mjs` (924 lines) — Standalone health verification utility
+  - `everclaw-migrate.mjs` (926 lines) — Interactive migration wizard
+- **lib/morpheus.mjs extensions**:
+  - `getMorpheusConfig()` — Parse .env and config files
+  - `getMorpheusSession()` — Get session ID, address, cookie
+  - `checkMorpheusHealth()` — API health check via /health or /v1/models
+- **Docker volume streaming** — Stream backup/restore directly from/to containers without intermediate files
+- **Wallet safety** — Address confirmation required for wallet restore (user must type full address)
+- **GLM-5 inference test** — Post-restore verification confirms working inference via Morpheus endpoint
+- **Auto-rollback** — `--rollback auto` detects and restores from latest pre-restore backup
+- **Migration state tracking** — `~/.everclaw/migration-state.json` tracks in-progress migrations
+
+### Security
+- **AGE encryption** — All backups encrypted with user-supplied passphrase (AES-256-GCM)
+- **Wallet double-encryption** — Wallet key encrypted separately inside the archive
+- **Shred on exit** — Staging directory securely deleted after restore
+- **Pre-restore backup** — Automatic safety backup before any restore operation
+
+### Documentation
+- **SKILL.md Section 22** — Full backup/restore documentation with CLI reference
+- **Quick Reference** — Added backup/restore commands
+- **Version** — Bumped to 2026.3.31
+
 ## [2026.3.27.1707] - 2026-03-27
 
 ### Fixed

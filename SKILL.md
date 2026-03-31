@@ -1,6 +1,6 @@
 ---
 name: everclaw
-version: 2026.3.26.0037
+version: 2026.3.31
 description: Open-source first AI inference — GLM-5 as default, Claude as fallback only. Own your inference forever via the [REDACTED] decentralized network. Stake MOR tokens, access GLM-5, GLM-4.7 Flash, Kimi K2.5, and 30+ models with persistent inference by recycling staked MOR. Open-source first model router routes all tiers to [REDACTED] by default — Claude only kicks in as an escape hatch when needed. Includes [REDACTED] API Gateway bootstrap for zero-config startup, OpenAI-compatible proxy with auto-session management, automatic retry with fresh sessions, OpenAI-compatible error classification to prevent cooldown cascades, multi-key auth rotation v2 with proactive DIEM balance monitoring and reactive 402 watchdog, Gateway Guardian v5 with direct curl inference probes (eliminates Signal spam), proactive Venice DIEM credit monitoring, circuit breaker for stuck sub-agents, nuclear self-healing restart, always-on proxy-router with launchd auto-restart, smart session archiver, three-shift cyclic execution engine (v2 with 15-minute execution loops), 24/7 always-on power configuration for macOS, bundled security skills, zero-dependency wallet management via macOS Keychain, x402 payment client for agent-to-agent USDC payments, ERC-8004 agent registry reader for discovering trustless agents on Base, and hardware-aware local Ollama fallback with auto model selection (Qwen3.5 family, 1.5B–72B based on available RAM/GPU).
 homepage: https://everclaw.com
 metadata:
@@ -1608,7 +1608,7 @@ if (agent.x402Support && apiEndpoint) {
 
 ---
 
-## Quick Reference (v2026.2.23)
+## Quick Reference (v2026.3.31)
 
 | Action | Command |
 |--------|---------|
@@ -1643,6 +1643,17 @@ if (agent.x402Support && apiEndpoint) {
 | Discover agent | `node scripts/agent-registry.mjs discover <id>` |
 | List agents | `node scripts/agent-registry.mjs list <start> [count]` |
 | Total agents | `node scripts/agent-registry.mjs total` |
+| **Backup export** | `node scripts/everclaw-export.mjs -o backup.tar.zst.age` |
+| **Backup (with wallet)** | `node scripts/everclaw-export.mjs -o backup.tar.zst.age --wallet` |
+| **Backup (Docker)** | `node scripts/everclaw-export.mjs -o backup.tar.zst.age --container NAME` |
+| **Restore** | `node scripts/everclaw-restore.mjs backup.tar.zst.age` |
+| **Restore (Docker)** | `node scripts/everclaw-restore.mjs backup.tar.zst.age --container NAME` |
+| **Rollback** | `node scripts/everclaw-restore.mjs --rollback auto` |
+| **Verify health** | `node scripts/everclaw-verify.mjs` |
+| **Verify backup** | `node scripts/everclaw-verify.mjs backup.tar.zst.age` |
+| **Migrate wizard** | `node scripts/everclaw-migrate.mjs` |
+| **Migrate export** | `node scripts/everclaw-migrate.mjs export --source docker` |
+| **Migrate import** | `node scripts/everclaw-migrate.mjs import --target host` |
 | Scan a skill | `node security/skillguard/src/cli.js scan <path>` |
 | Batch scan | `node security/skillguard/src/cli.js batch <dir>` |
 | Security audit | `bash security/clawdstrike/scripts/collect_verified.sh` |
@@ -2185,7 +2196,342 @@ See `three-shifts/SKILL.md` for full documentation including approval workflows,
 
 ---
 
+## 22. Backup & Restore (v2026.3.31)
+
+Everclaw includes a comprehensive backup and restore system for disaster recovery and migration. All backups are encrypted with AGE encryption, portable across machines, and support both host and Docker environments.
+
+### Features
+
+- **Encrypted backups** — AGE passphrase encryption (AES-256-GCM)
+- **Incremental archives** — Only changed files on subsequent backups
+- **Wallet support** — Optionally include encrypted wallet private key
+- **Docker volumes** — Stream backups directly from/to containers
+- **Pre-restore backups** — Automatic safety backup before restore
+- **Rollback** — One-command revert to pre-restore state
+- **Verification** — GLM-5 inference test confirms working restore
+- **Migration wizard** — Interactive guided migration between machines
+
+### Quick Start
+
+```bash
+# Export EverClaw state to encrypted backup
+node scripts/everclaw-export.mjs -o backup.tar.zst.age
+
+# Restore from backup
+node scripts/everclaw-restore.mjs backup.tar.zst.age
+
+# Verify backup integrity
+node scripts/everclaw-verify.mjs backup.tar.zst.age
+
+# Migrate to new machine (interactive)
+node scripts/everclaw-migrate.mjs
+```
+
+### Export (everclaw-export.mjs)
+
+Creates an encrypted backup of:
+- OpenClaw state (`~/.openclaw`)
+- Morpheus wallet and session data (`~/morpheus` or `~/.morpheus`)
+- EverClaw config (`~/.everclaw`)
+- Optional: Wallet private key (encrypted inside archive)
+
+```bash
+# Basic export (prompts for passphrase)
+node scripts/everclaw-export.mjs -o backup.tar.zst.age
+
+# Include wallet private key
+node scripts/everclaw-export.mjs -o backup.tar.zst.age --wallet
+
+# Docker container export
+node scripts/everclaw-export.mjs -o backup.tar.zst.age --container everclaw-prod
+
+# Docker volumes only (for container migration)
+node scripts/everclaw-export.mjs -o backup.tar.zst.age --container everclaw-prod --volumes-only
+
+# Use passphrase from environment
+EVERCLAW_BACKUP_PASSPHRASE="your-secret" node scripts/everclaw-export.mjs -o backup.tar.zst.age
+
+# Dry run (show what would be backed up)
+node scripts/everclaw-export.mjs -o backup.tar.zst.age --dry-run
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output FILE` | Output file (default: `everclaw-backup-YYYYMMDD-HHMMSS.tar.zst.age`) |
+| `-c, --container NAME` | Docker container name |
+| `--volumes-only` | Only backup Docker volumes (skip host paths) |
+| `--no-volumes` | Skip Docker volumes (host paths only) |
+| `--wallet` | Include encrypted wallet private key |
+| `--no-wallet` | Exclude wallet (default) |
+| `--passphrase-from-env` | Read passphrase from `EVERCLAW_BACKUP_PASSPHRASE` |
+| `--dry-run` | Show what would be backed up without writing |
+| `-v, --verbose` | Detailed output |
+| `-q, --quiet` | Minimal output |
+
+**What's backed up:**
+
+| Path | Host | Docker | Volumes-only |
+|------|------|--------|--------------|
+| `~/.openclaw/state/` | ✅ | ✅ | ❌ |
+| `~/morpheus/` or `~/.morpheus/` | ✅ | ✅ | ❌ |
+| `~/.everclaw/` | ✅ | ✅ | ❌ |
+| Docker volumes | ❌ | ✅ | ✅ |
+| Wallet key (optional) | ✅ | ✅ | ❌ |
+
+### Restore (everclaw-restore.mjs)
+
+Restores from an encrypted backup. Creates a safety backup before restore and supports rollback.
+
+```bash
+# Basic restore (prompts for passphrase)
+node scripts/everclaw-restore.mjs backup.tar.zst.age
+
+# Restore to Docker container
+node scripts/everclaw-restore.mjs backup.tar.zst.age --container everclaw-prod
+
+# Docker volumes only
+node scripts/everclaw-restore.mjs backup.tar.zst.age --container everclaw-prod --volumes-only
+
+# Skip pre-restore backup (dangerous!)
+node scripts/everclaw-restore.mjs backup.tar.zst.age --no-backup
+
+# Rollback from pre-restore backup
+node scripts/everclaw-restore.mjs --rollback /tmp/everclaw-pre-restore-1234567890
+
+# Auto-detect latest pre-restore backup
+node scripts/everclaw-restore.mjs --rollback auto
+
+# Dry run (show what would be restored)
+node scripts/everclaw-restore.mjs backup.tar.zst.age --dry-run
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--rollback DIR` | Restore from pre-restore backup (use `auto` for latest) |
+| `-c, --container NAME` | Docker container name |
+| `--volumes-only` | Only restore Docker volumes |
+| `--no-volumes` | Skip Docker volumes |
+| `--no-backup` | Don't create pre-restore backup (risky) |
+| `--no-stop` | Don't stop services before restore |
+| `--no-verify` | Skip post-restore verification |
+| `--passphrase-from-env` | Read passphrase from `EVERCLAW_BACKUP_PASSPHRASE` |
+| `--dry-run` | Show what would be restored |
+| `-v, --verbose` | Detailed output |
+| `-q, --quiet` | Minimal output |
+
+**Restore flow:**
+
+1. **Decrypt** archive to staging directory
+2. **Validate** manifest and version compatibility
+3. **Stop** services (OpenClaw gateway, proxy-router)
+4. **Backup** existing state to `/tmp/everclaw-pre-restore-TIMESTAMP/`
+5. **Restore** OpenClaw, Morpheus, EverClaw, Docker volumes
+6. **Restore wallet** (if included, requires address confirmation)
+7. **Verify** — OpenClaw doctor + GLM-5 inference test
+8. **Restart** services
+
+### Verify (everclaw-verify.mjs)
+
+Standalone verification utility for health checks and backup integrity.
+
+```bash
+# Full verification
+node scripts/everclaw-verify.mjs
+
+# Specific checks
+node scripts/everclaw-verify.mjs --inference --wallet
+node scripts/everclaw-verify.mjs --no-session --no-wallet
+
+# Verify backup file (requires passphrase)
+EVERCLAW_BACKUP_PASSPHRASE="secret" node scripts/everclaw-verify.mjs backup.tar.zst.age
+
+# JSON output (for scripts)
+node scripts/everclaw-verify.mjs --json
+```
+
+**Checks performed:**
+
+| Check | Description |
+|-------|-------------|
+| `openclaw-binary` | OpenClaw binary in PATH |
+| `openclaw-doctor` | OpenClaw doctor diagnostics |
+| `openclaw-state` | State directory exists |
+| `openclaw-version` | OpenClaw version detected |
+| `everclaw-config` | EverClaw config directory |
+| `everclaw-key` | EverClaw key file |
+| `everclaw-version` | EverClaw version |
+| `morpheus-dir` | Morpheus directory |
+| `morpheus-wallet` | Morpheus wallet file |
+| `morpheus-session` | Morpheus session data |
+| `wallet-keychain` | Wallet accessible from keychain |
+| `wallet-address` | Wallet address extraction |
+| `morpheus-health` | Morpheus API health |
+| `inference-test` | GLM-5 inference test |
+| `docker-env` | Docker environment check |
+| `backup-manifest` | Backup file validation |
+
+**Exit codes:**
+- `0` — All checks passed
+- `1` — Some checks failed
+- `2` — Dependency missing
+- `3` — Backup file not found or invalid
+
+### Migrate (everclaw-migrate.mjs)
+
+Interactive wizard for migrating EverClaw between machines.
+
+```bash
+# Interactive wizard (default)
+node scripts/everclaw-migrate.mjs
+
+# Generate export commands for source machine
+node scripts/everclaw-migrate.mjs export --source docker --container everclaw-prod
+
+# Show transfer instructions
+node scripts/everclaw-migrate.mjs transfer --source-host 192.168.1.100 --target-host 192.168.1.200
+
+# Generate import commands for target machine
+node scripts/everclaw-migrate.mjs import --target host
+
+# Check migration status
+node scripts/everclaw-migrate.mjs status
+```
+
+**Migration flow:**
+
+1. **Detect environment** — Host vs Docker, container names
+2. **Ask wallet preference** — Include or exclude wallet
+3. **Ask transfer method** — SSH, USB, cloud, manual
+4. **Generate commands** — Copy-paste ready for source and target
+5. **Save state** — Track migration progress in `~/.everclaw/migration-state.json`
+
+**Modes:**
+
+| Mode | Description |
+|------|-------------|
+| `wizard` | Full interactive wizard (default) |
+| `export` | Generate export commands for source |
+| `transfer` | Show transfer instructions |
+| `import` | Generate import commands for target |
+| `status` | Check current migration status |
+
+### Backup File Format
+
+EverClaw backups are AGE-encrypted tar.zst archives containing:
+
+```
+backup.tar.zst.age (AGE encrypted)
+└── backup.tar.zst
+    ├── manifest.json          # Backup metadata
+    ├── openclaw/              # OpenClaw state
+    │   └── state/
+    ├── morpheus/              # Morpheus data (or .morpheus/)
+    ├── everclaw/              # EverClaw config
+    ├── volumes/               # Docker volumes (if applicable)
+    └── wallet/                # Wallet (if included)
+        └── wallet.enc         # AGE-encrypted private key
+```
+
+**Manifest example:**
+
+```json
+{
+  "version": "2026.3.31",
+  "created": "2026-03-31T13:00:00Z",
+  "platform": { "os": "darwin", "arch": "arm64" },
+  "exportMode": "full",
+  "components": ["openclaw", "morpheus", "everclaw"],
+  "sizes": { "openclaw": 5242880, "morpheus": 1048576, "everclaw": 4096 },
+  "checksums": { "openclaw": "sha256:...", "morpheus": "sha256:..." },
+  "versions": { "openclaw": "2026.3.12", "everclaw": "2026.3.31" }
+}
+```
+
+### Security Model
+
+- **Passphrase encryption** — AGE encryption with user-supplied passphrase
+- **Wallet double-encryption** — Wallet key encrypted separately inside the archive
+- **Address confirmation** — Wallet restore requires typing the full address
+- **Pre-restore backup** — Automatic safety backup before any restore
+- **One-command rollback** — Revert to pre-restore state instantly
+- **Shred on exit** — Staging directory securely deleted after restore
+
+### Docker Support
+
+EverClaw backup/restore fully supports Docker containers:
+
+**Export from container:**
+```bash
+# Full container backup (volumes + config)
+node scripts/everclaw-export.mjs -o backup.tar.zst.age --container everclaw-prod
+
+# Volumes only (for migration)
+node scripts/everclaw-export.mjs -o backup.tar.zst.age --container everclaw-prod --volumes-only
+```
+
+**Restore to container:**
+```bash
+# Full restore to container
+node scripts/everclaw-restore.mjs backup.tar.zst.age --container everclaw-prod
+
+# Volumes only
+node scripts/everclaw-restore.mjs backup.tar.zst.age --container everclaw-prod --volumes-only
+```
+
+**Auto-detection:** If a single EverClaw container is running, `--container` is auto-detected. If multiple containers exist, specify the container name.
+
+### Exit Codes
+
+| Code | Export | Restore | Verify | Migrate |
+|------|--------|---------|--------|---------|
+| 0 | Success | Success | All checks passed | Success |
+| 1 | Error | Error | Some checks failed | Error |
+| 2 | Dependency missing | Dependency missing | Dependency missing | — |
+| 3 | Output error | Archive not found | Archive not found | — |
+| 4 | Encryption failed | Decryption failed | — | — |
+| 5 | Docker error | Wallet restore failed | — | — |
+| 6 | — | Service stop failed | — | — |
+| 7 | — | Manifest invalid | — | — |
+| 8 | — | Version incompatible | — | — |
+| 9 | — | Verification failed | — | — |
+
+### Cron Integration
+
+Set up automatic daily backups:
+
+```json5
+{
+  "name": "EverClaw daily backup",
+  "schedule": { "kind": "cron", "expr": "0 3 * * *", "tz": "America/Chicago" },
+  "sessionTarget": "isolated",
+  "payload": {
+    "kind": "agentTurn",
+    "model": "morpheus/glm-4.7-flash",
+    "message": "Run everclaw-export to create a daily backup. Use EVERCLAW_BACKUP_PASSPHRASE from keychain. Store backup in ~/.everclaw/backups/ with date in filename. Keep only the last 7 backups.",
+    "timeoutSeconds": 300
+  }
+}
+```
+
+---
+
 ## Changelog
+
+### 2026.3.31
+- **Backup & Restore System** — Full disaster recovery with AGE-encrypted backups
+  - `everclaw-export.mjs` (781 lines) — Encrypted backup creation with Docker support
+  - `everclaw-restore.mjs` (1131 lines) — Restore with pre-restore backup and rollback
+  - `everclaw-verify.mjs` (924 lines) — Standalone health verification utility
+  - `everclaw-migrate.mjs` (926 lines) — Interactive migration wizard
+- **lib/morpheus.mjs** — Added `getMorpheusConfig()`, `getMorpheusSession()`, `checkMorpheusHealth()`
+- **Docker volumes** — Stream backup/restore directly from/to containers
+- **Wallet safety** — Address confirmation required for wallet restore
+- **GLM-5 inference test** — Post-restore verification confirms working inference
+- **Auto-rollback** — One-command revert from pre-restore backup
 
 ### 2026.2.21
 - **Three-Shift Task Planning** — Morning/Afternoon/Night shift system with prioritized task proposals and approval workflow
