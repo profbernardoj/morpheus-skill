@@ -1,6 +1,6 @@
 {
   "name": "everclaw",
-  "version": "2026.4.1.0228",
+  "version": "2026.4.1.0459",
   "type": "module",
   "description": "Open-source first AI inference via Morpheus decentralized network",
   "scripts": {
@@ -11,6 +11,16 @@
     "test:keychain": "node --test tests/lib-keychain.mjs",
     "test:manifest": "node --test tests/lib-manifest.mjs"
   },
-  "keywords": ["morpheus", "ai", "inference", "decentralized", "openclaw", "everclaw"],
-  "license": "MIT"
+  "keywords": [
+    "morpheus",
+    "ai",
+    "inference",
+    "decentralized",
+    "openclaw",
+    "everclaw"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "argon2": "^0.41.1"
+  }
 }

@@ -25,6 +25,7 @@ import crypto from 'crypto';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+import { ENC_FORMAT_V2, deriveEncryptionKey, getPassphraseFromEnv, askLine, decryptLegacyV1 } from './lib/wallet-crypto.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
 import { execSync } from 'child_process';
 
@@ -122,7 +123,7 @@ async function solvePoW(challenge) {
  * Get private key from keychain.
  * Reuses the same logic as everclaw-wallet.mjs.
  */
-function getKeyFromKeychain() {
+async function getKeyFromKeychain() {
   const platform = os.platform();
   const KEYCHAIN_ACCOUNT = process.env.EVERCLAW_KEYCHAIN_ACCOUNT || 'everclaw-agent';
   const KEYCHAIN_SERVICE = process.env.EVERCLAW_KEYCHAIN_SERVICE || 'everclaw-wallet-key';
@@ -158,29 +159,36 @@ function getKeyFromKeychain() {
   // Encrypted file fallback
   if (fs.existsSync(KEY_STORE_PATH)) {
     const blob = fs.readFileSync(KEY_STORE_PATH);
-    if (blob.length < 33) return null;
+    if (blob.length < 2) return null;
 
-    const iv = blob.subarray(0, 16);
-    const authTag = blob.subarray(16, 32);
-    const encrypted = blob.subarray(32);
+    if (blob[0] === ENC_FORMAT_V2) {
+      // --- v2: Argon2id/scrypt passphrase-based ---
+      if (blob.length < 66) return null;
+      const salt = blob.subarray(1, 33);
+      const iv = blob.subarray(33, 49);
+      const authTag = blob.subarray(49, 65);
+      const encrypted = blob.subarray(65);
 
-    let machineId = 'everclaw-fallback';
-    try {
-      if (fs.existsSync('/etc/machine-id')) {
-        machineId = fs.readFileSync('/etc/machine-id', 'utf-8').trim();
-      } else if (fs.existsSync('/var/lib/dbus/machine-id')) {
-        machineId = fs.readFileSync('/var/lib/dbus/machine-id', 'utf-8').trim();
+      // Acquire passphrase: env var → file → interactive prompt
+      let passphrase = getPassphraseFromEnv();
+      if (!passphrase) {
+        if (!process.stdin.isTTY) {
+          console.error('❌ Wallet passphrase required. Set EVERCLAW_WALLET_PASSPHRASE env var.');
+          return null;
+        }
+        passphrase = (await askLine('🔑 Enter wallet passphrase: ')).trim();
+        if (!passphrase) return null;
       }
-    } catch {}
 
-    const salt = `everclaw-${KEYCHAIN_ACCOUNT}-${process.env.USER || 'agent'}`;
-    const encKey = crypto.scryptSync(machineId, salt, 32);
+      // Single decryption path using shared deriveEncryptionKey helper
+      const encKey = await deriveEncryptionKey(passphrase, salt);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', encKey, iv);
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf-8');
+    }
 
-    const decipher = crypto.createDecipheriv('aes-256-gcm', encKey, iv);
-    decipher.setAuthTag(authTag);
-
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    return decrypted.toString('utf-8');
+    // --- v1 legacy: machine-id based (shared helper) ---
+    return decryptLegacyV1(blob, KEYCHAIN_ACCOUNT);
   }
 
   return null;
@@ -208,7 +216,7 @@ async function bootstrap() {
 
   try {
     // Get private key
-    const privateKey = getKeyFromKeychain();
+    const privateKey = await getKeyFromKeychain();
     if (!privateKey) {
       throw new Error('No wallet found. Run `everclaw-wallet.mjs setup` first.');
     }

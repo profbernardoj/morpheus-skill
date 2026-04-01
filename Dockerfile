@@ -108,7 +108,7 @@ COPY --from=openclaw-builder --chown=node:node /everclaw-skill /home/node/.openc
 # Install EverClaw dependencies (x402, viem for finance tracker)
 WORKDIR /home/node/.openclaw/workspace
 RUN npm init -y 2>/dev/null; \
-    npm install --omit=dev @x402/fetch @x402/evm viem 2>/dev/null || true
+    npm install --omit=dev @x402/fetch @x402/evm viem argon2 2>/dev/null || true
 
 WORKDIR /app
 
@@ -130,7 +130,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 # ─── Environment ──────────────────────────────────────────────────────────────
 
-ARG EVERCLAW_VERSION=2026.4.1.0228
+ARG EVERCLAW_VERSION=2026.4.1.0459
 ENV EVERCLAW_VERSION=${EVERCLAW_VERSION}
 ENV NODE_ENV=production
 ENV EVERCLAW_PROXY_PORT=8083

@@ -741,11 +741,31 @@ Approves the [REDACTED] Diamond contract to use your MOR for session staking.
 
 ### Security Model
 
-- Private key stored in **macOS Keychain** (encrypted at rest)
-- Protected by your **login password / Touch ID**
+- **macOS**: Private key stored in **macOS Keychain** (encrypted at rest, protected by login password / Touch ID)
+- **Linux**: Key stored in **libsecret** (GNOME Keyring / KDE Wallet) if available
+- **Fallback** (all platforms): Key encrypted with **Argon2id** (64 MiB, timeCost 4) using a user-supplied passphrase, stored at `~/.everclaw/wallet.enc`
+- **v2 encrypted format**: `version(1) + salt(32) + iv(16) + authTag(16) + ciphertext` — salt stored in file, no separate files needed
 - Key is **injected at runtime** and immediately unset from environment
 - Key is **never written to disk** as a plaintext file
-- For advanced users: 1Password is supported as a fallback (backward compatible)
+- Legacy v1 files (machine-id based) are **automatically migrated** to v2 on first access with backup
+
+**Docker / CI (non-interactive):**
+```bash
+# Option 1: Direct env var
+docker run -e EVERCLAW_WALLET_PASSPHRASE=yourStrongPassphrase ...
+
+# Option 2: Docker secrets file
+docker run -e EVERCLAW_WALLET_PASSPHRASE_FILE=/run/secrets/wallet_pass ...
+```
+
+**Environment Variables:**
+| Variable | Description |
+|----------|-------------|
+| `EVERCLAW_WALLET_PASSPHRASE` | Wallet passphrase (takes priority over interactive prompt) |
+| `EVERCLAW_WALLET_PASSPHRASE_FILE` | Path to file containing passphrase (Docker secrets) |
+| `EVERCLAW_KEYCHAIN_ACCOUNT` | Keychain account name (default: `everclaw-agent`) |
+| `EVERCLAW_KEYCHAIN_SERVICE` | Keychain service name (default: `everclaw-wallet-key`) |
+| `EVERCLAW_KEY_STORE` | Override encrypted file path (default: `~/.everclaw/wallet.enc`) |
 
 ### Full Command Reference
 

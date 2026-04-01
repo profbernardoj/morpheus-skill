@@ -2,6 +2,19 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.1] - 2026-04-01
+
+### Security — Wallet Encryption Overhaul (Issue #7)
+- **[CRITICAL] Replaced machine-id key derivation with Argon2id passphrase-based encryption** — `/etc/machine-id` is world-readable, making the previous wallet encryption trivially breakable by any local user. Now uses user-supplied passphrase with Argon2id (64 MiB, timeCost 4) as primary KDF, scrypt (N=131072) as fallback.
+- **New shared crypto module `scripts/lib/wallet-crypto.mjs`** — Single source of truth for `deriveEncryptionKey()`, `ENC_FORMAT_V2`, `promptPassphrase()`, `getPassphraseFromEnv()`, `decryptLegacyV1()`. Eliminates duplication between `everclaw-wallet.mjs` and `bootstrap-client.mjs`.
+- **v2 encrypted file format** — `version(1) + salt(32) + iv(16) + authTag(16) + ciphertext`. Salt stored in file header; no separate salt file needed.
+- **Automatic v1 → v2 migration** — Legacy files detected and upgraded on first access. Backup created at `~/.everclaw/wallet.enc.bak` before migration. Passphrase confirmation required (double-entry).
+- **Cross-platform key storage** — macOS Keychain (primary) → Linux libsecret → encrypted file fallback. All platforms now secure.
+- **Docker/CI passphrase injection** — `EVERCLAW_WALLET_PASSPHRASE` env var or `EVERCLAW_WALLET_PASSPHRASE_FILE` (Docker secrets) for non-interactive environments.
+- **Passphrase strength warning** — Warns on passphrases shorter than 12 characters.
+- **New dependency: `argon2@^0.41.1`** — Zero vulnerabilities, prebuilt binaries for all platforms.
+- **11 new tests in `tests/lib-wallet-crypto.mjs`** — Covers Argon2id derivation, v2 round-trip encrypt/decrypt, wrong-passphrase rejection, v1 legacy decryption, env var passphrase acquisition.
+
 ## [2026.3.31] - 2026-03-31
 
 ### Added

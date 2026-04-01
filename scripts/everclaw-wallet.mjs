@@ -17,10 +17,11 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { platform } from "node:os";
+import { ENC_FORMAT_V2, deriveEncryptionKey, getPassphraseFromEnv, askLine, promptPassphrase, decryptLegacyV1 } from "./lib/wallet-crypto.mjs";
 import { createPublicClient, createWalletClient, http, formatEther, parseEther, formatUnits, parseUnits, encodeFunctionData, parseAbi, maxUint256 } from "viem";
 import { base } from "viem/chains";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -138,37 +139,34 @@ function libsecretRetrieve() {
 }
 
 // -- Encrypted file backend (universal fallback) --
-// Uses AES-256-GCM with a key derived from machine-id + username.
-// Less secure than Keychain/libsecret (derivation input is guessable),
-// but encrypts at rest and works on headless servers.
-function getFileEncryptionKey() {
-  let machineId = "everclaw-fallback";
-  try {
-    if (existsSync("/etc/machine-id")) {
-      machineId = readFileSync("/etc/machine-id", "utf-8").trim();
-    } else if (existsSync("/var/lib/dbus/machine-id")) {
-      machineId = readFileSync("/var/lib/dbus/machine-id", "utf-8").trim();
-    }
-  } catch {}
-  const salt = `everclaw-${KEYCHAIN_ACCOUNT}-${process.env.USER || "agent"}`;
-  return scryptSync(machineId, salt, 32);
-}
+// v2: Uses AES-256-GCM with a key derived from user passphrase via Argon2id.
+// v1 (legacy): Used machine-id + username (insecure — see Issue #7).
+// Passphrase sources (priority order):
+//   1. EVERCLAW_WALLET_PASSPHRASE env var
+//   2. EVERCLAW_WALLET_PASSPHRASE_FILE env var (reads file contents)
+//   3. Interactive prompt (TTY required)
 
-function encryptedFileStore(key) {
+// Shared crypto primitives imported from lib/wallet-crypto.mjs
+// (ENC_FORMAT_V2, deriveEncryptionKey, getPassphraseFromEnv, askLine, promptPassphrase, decryptLegacyV1)
+
+// --- v2 encrypted file store/retrieve ---
+
+async function encryptedFileStore(key, passphrase) {
   try {
     const dir = join(process.env.HOME || "", ".everclaw");
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
 
-    const encKey = getFileEncryptionKey();
+    const salt = randomBytes(32);
+    const encKey = await deriveEncryptionKey(passphrase, salt);
     const iv = randomBytes(16);
     const cipher = createCipheriv("aes-256-gcm", encKey, iv);
     const encrypted = Buffer.concat([cipher.update(key, "utf-8"), cipher.final()]);
     const authTag = cipher.getAuthTag();
 
-    // Store as: iv (16) + authTag (16) + ciphertext
-    const blob = Buffer.concat([iv, authTag, encrypted]);
+    // v2 format: version(1) + salt(32) + iv(16) + authTag(16) + ciphertext
+    const blob = Buffer.concat([Buffer.from([ENC_FORMAT_V2]), salt, iv, authTag, encrypted]);
     writeFileSync(KEY_STORE_PATH, blob);
     chmodSync(KEY_STORE_PATH, 0o600);
     return true;
@@ -178,36 +176,83 @@ function encryptedFileStore(key) {
   }
 }
 
-function encryptedFileRetrieve() {
+async function encryptedFileRetrieve() {
   try {
     if (!existsSync(KEY_STORE_PATH)) return null;
     const blob = readFileSync(KEY_STORE_PATH);
-    if (blob.length < 33) return null; // iv(16) + authTag(16) + at least 1 byte
+    if (blob.length < 2) return null;
 
-    const iv = blob.subarray(0, 16);
-    const authTag = blob.subarray(16, 32);
-    const encrypted = blob.subarray(32);
+    // Detect format version
+    if (blob[0] === ENC_FORMAT_V2) {
+      // --- v2: Argon2id/scrypt passphrase-based ---
+      if (blob.length < 66) return null; // version(1) + salt(32) + iv(16) + authTag(16) + 1
+      const salt = blob.subarray(1, 33);
+      const iv = blob.subarray(33, 49);
+      const authTag = blob.subarray(49, 65);
+      const encrypted = blob.subarray(65);
 
-    const encKey = getFileEncryptionKey();
-    const decipher = createDecipheriv("aes-256-gcm", encKey, iv);
-    decipher.setAuthTag(authTag);
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    return decrypted.toString("utf-8");
+      const passphrase = await promptPassphrase(false);
+      if (!passphrase) return null;
+
+      const encKey = await deriveEncryptionKey(passphrase, salt);
+      const decipher = createDecipheriv("aes-256-gcm", encKey, iv);
+      decipher.setAuthTag(authTag);
+      const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+      return decrypted.toString("utf-8");
+    }
+
+    // --- v1 legacy: machine-id based — migrate to v2 ---
+    console.log("\n🔒 Upgrading wallet encryption to secure Argon2id format...");
+    const plaintext = decryptLegacyV1(blob, KEYCHAIN_ACCOUNT);
+    if (!plaintext) {
+      console.error("❌ Failed to decrypt legacy wallet file. Cannot migrate.");
+      return null;
+    }
+
+    // Create backup before migration
+    const backupPath = KEY_STORE_PATH + ".bak";
+    copyFileSync(KEY_STORE_PATH, backupPath);
+    chmodSync(backupPath, 0o600);
+    console.log(`📋 Legacy wallet backed up to ${backupPath}`);
+
+    // Prompt for new passphrase (with confirmation)
+    console.log("   You need to set a passphrase to protect your wallet.");
+    const passphrase = await promptPassphrase(true);
+    if (!passphrase) {
+      console.error("❌ Migration aborted — passphrase required. Your wallet is still accessible with the old format.");
+      return plaintext; // Still return the key so the user isn't locked out
+    }
+
+    // Re-encrypt with v2 format
+    const stored = await encryptedFileStore(plaintext, passphrase);
+    if (stored) {
+      console.log("✅ Wallet encryption upgraded to Argon2id. Backup: " + backupPath);
+    } else {
+      console.log("⚠️  Migration encryption failed. Wallet still accessible via backup.");
+    }
+    return plaintext;
   } catch {
     return null;
   }
 }
 
 // -- Unified interface --
-function keychainStore(key) {
+async function keychainStore(key) {
   if (OS === "darwin") return macKeychainStore(key);
   if (OS === "linux" && hasSecretTool()) {
     if (libsecretStore(key)) return true;
   }
-  return encryptedFileStore(key);
+  // Encrypted file fallback — requires passphrase
+  console.log("\n🔐 No OS keyring available. Using passphrase-encrypted file storage.");
+  const passphrase = await promptPassphrase(true); // confirm on first store
+  if (!passphrase) {
+    console.error("❌ Cannot store wallet without a passphrase.");
+    return false;
+  }
+  return encryptedFileStore(key, passphrase);
 }
 
-function keychainRetrieve() {
+async function keychainRetrieve() {
   if (OS === "darwin") return macKeychainRetrieve();
   if (OS === "linux" && hasSecretTool()) {
     const val = libsecretRetrieve();
@@ -216,8 +261,8 @@ function keychainRetrieve() {
   return encryptedFileRetrieve();
 }
 
-function keychainExists() {
-  return keychainRetrieve() !== null;
+async function keychainExists() {
+  return (await keychainRetrieve()) !== null;
 }
 
 function getBackendName() {
@@ -286,8 +331,8 @@ function applySlippage(amountOut) {
 // --- Commands ---
 
 async function cmdSetup() {
-  if (keychainExists()) {
-    const existing = keychainRetrieve();
+  if (await keychainExists()) {
+    const existing = await keychainRetrieve();
     const account = getAccount(existing);
     console.log("⚠️  Wallet already exists in Keychain.");
     console.log(`   Address: ${account.address}`);
@@ -299,16 +344,12 @@ async function cmdSetup() {
   const privateKey = generatePrivateKey();
   const account = getAccount(privateKey);
 
-  const keychainOk = keychainStore(privateKey);
+  const keychainOk = await keychainStore(privateKey);
 
   if (!keychainOk) {
-    console.error("⚠️  Primary Keychain storage failed. Trying encrypted file fallback...");
-
-    if (!encryptedFileStore(privateKey)) {
-      console.error("❌ All storage backends failed. Wallet NOT saved.");
-      console.error("   Run 'setup' again after fixing storage issues.");
-      process.exit(1);
-    }
+    console.error("❌ All storage backends failed. Wallet NOT saved.");
+    console.error("   Run 'setup' again after fixing storage issues.");
+    process.exit(1);
   }
 
   const backend = keychainOk ? getBackendName() : `encrypted file (${KEY_STORE_PATH})`;
@@ -329,11 +370,16 @@ async function cmdSetup() {
   console.log("╚══════════════════════════════════════════════════════════════╝");
 
   // Auto-bootstrap: request micro-funding (0.0008 ETH + 2 USDC on Base)
-  try { const { bootstrap: bs } = await import('./bootstrap-client.mjs'); await bs(); } catch (e) { console.log(`\n⚠️  Auto-bootstrap skipped: ${e.message}`); }
+  try {
+    const { bootstrap: bs } = await import('./bootstrap-client.mjs');
+    await bs();
+  } catch (e) {
+    console.log(`\n⚠️  Auto-bootstrap skipped: ${e.message}`);
+  }
 }
 
 async function cmdAddress() {
-  const key = keychainRetrieve();
+  const key = await keychainRetrieve();
   if (!key) {
     console.error("❌ No wallet found. Run 'setup' first.");
     process.exit(1);
@@ -343,7 +389,7 @@ async function cmdAddress() {
 }
 
 async function cmdBalance() {
-  const key = keychainRetrieve();
+  const key = await keychainRetrieve();
   if (!key) {
     console.error("❌ No wallet found. Run 'setup' first.");
     process.exit(1);
@@ -392,7 +438,7 @@ async function cmdSwap(tokenIn, amountStr) {
     process.exit(1);
   }
 
-  const key = keychainRetrieve();
+  const key = await keychainRetrieve();
   if (!key) {
     console.error("❌ No wallet found. Run 'setup' first.");
     process.exit(1);
@@ -516,7 +562,7 @@ async function cmdSwap(tokenIn, amountStr) {
 }
 
 async function cmdApprove(amountStr) {
-  const key = keychainRetrieve();
+  const key = await keychainRetrieve();
   if (!key) {
     console.error("❌ No wallet found. Run 'setup' first.");
     process.exit(1);
@@ -588,7 +634,7 @@ async function cmdApprove(amountStr) {
 }
 
 async function cmdExportKey() {
-  const key = keychainRetrieve();
+  const key = await keychainRetrieve();
   if (!key) {
     console.error("❌ No wallet found. Run 'setup' first.");
     process.exit(1);
@@ -632,7 +678,7 @@ async function cmdImportKey(privateKey) {
 
   try {
     const account = getAccount(privateKey);
-    if (!keychainStore(privateKey)) {
+    if (!(await keychainStore(privateKey))) {
       console.error("❌ Failed to store key in Keychain.");
       process.exit(1);
     }

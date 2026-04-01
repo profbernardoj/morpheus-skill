@@ -313,9 +313,23 @@ When a session ends, your MOR comes back. Open a new session with the same token
 - **OpenClaw** — installed and running
 - **Node.js** — v20+ (bundled with OpenClaw)
 - **ETH or USDC on Base** — to swap for MOR tokens
-- **macOS** — for Keychain wallet storage (v0.4+)
+- **macOS or Linux** — macOS Keychain or libsecret for native key storage; encrypted file fallback works everywhere
 
 That's it. No external accounts. No API keys. No subscriptions.
+
+### Wallet Security
+
+Wallet keys are stored using the strongest available backend:
+
+| Platform | Backend | Protection |
+|----------|---------|------------|
+| macOS | Keychain | Login password / Touch ID |
+| Linux | libsecret (GNOME Keyring) | Desktop session |
+| All | Encrypted file fallback | Argon2id passphrase (64 MiB, timeCost 4) |
+
+The encrypted file fallback uses **AES-256-GCM** with keys derived from your passphrase via **Argon2id** (with scrypt as a secondary fallback). Legacy v1 files are automatically migrated on first access with a backup at `~/.everclaw/wallet.enc.bak`.
+
+For Docker/CI, set `EVERCLAW_WALLET_PASSPHRASE` or `EVERCLAW_WALLET_PASSPHRASE_FILE` environment variables.
 
 ---
 
