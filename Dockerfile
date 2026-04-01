@@ -112,12 +112,15 @@ RUN npm init -y 2>/dev/null; \
 
 WORKDIR /app
 
-# ─── Default OpenClaw Configuration ──────────────────────────────────────────
-# This config bootstraps OpenClaw with Morpheus as the primary provider.
-# Users can override by mounting their own ~/.openclaw/openclaw.json
+# ─── Default OpenClaw Configuration Template ───────────────────────────────
+# Template deliberately placed OUTSIDE any VOLUME (/opt/everclaw/defaults/)
+# so it survives Barney's empty persistent mount overlay on first run.
+# Copied to ~/.openclaw/openclaw.json by docker-entrypoint.sh ONLY if
+# the config file does not already exist.
+RUN mkdir -p /opt/everclaw/defaults
 
-COPY config/openclaw-default.json /home/node/.openclaw/openclaw-default.json
-RUN chown node:node /home/node/.openclaw/openclaw-default.json
+COPY config/openclaw-default.json /opt/everclaw/defaults/openclaw-default.json
+RUN chown node:node /opt/everclaw/defaults/openclaw-default.json
 
 # ─── Boot File Templates ─────────────────────────────────────────────────────
 # Copy boot templates to workspace if they don't already exist (first run)
@@ -127,7 +130,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 # ─── Environment ──────────────────────────────────────────────────────────────
 
-ARG EVERCLAW_VERSION=2026.3.27.0434
+ARG EVERCLAW_VERSION=2026.3.27.1713
 ENV EVERCLAW_VERSION=${EVERCLAW_VERSION}
 ENV NODE_ENV=production
 ENV EVERCLAW_PROXY_PORT=8083

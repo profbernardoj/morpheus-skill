@@ -15,7 +15,7 @@ OPENCLAW_HOME="${HOME}/.openclaw"
 WORKSPACE="${OPENCLAW_HOME}/workspace"
 SKILLS_DIR="${WORKSPACE}/skills/everclaw"
 CONFIG_FILE="${OPENCLAW_HOME}/openclaw.json"
-DEFAULT_CONFIG="${OPENCLAW_HOME}/openclaw-default.json"
+DEFAULT_CONFIG="/opt/everclaw/defaults/openclaw-default.json"
 
 GATEWAY_PID=""
 PROXY_PID=""

@@ -1,13 +1,16 @@
 {
   "name": "everclaw",
-  "version": "2026.3.27.0434",
-  "private": true,
-  "description": "Morpheus inference skill for OpenClaw agents",
+  "version": "2026.3.31",
   "type": "module",
-  "morpheusNodeVersion": "v5.14.0",
-  "dependencies": {
-    "@x402/evm": "^2.4.0",
-    "@x402/fetch": "^2.4.0",
-    "viem": "^2.46.2"
-  }
+  "description": "Open-source first AI inference via Morpheus decentralized network",
+  "scripts": {
+    "test": "node --test tests/*.mjs",
+    "test:lib": "node --test tests/lib-*.mjs",
+    "test:encryption": "node --test tests/lib-encryption.mjs",
+    "test:docker": "node --test tests/lib-docker.mjs",
+    "test:keychain": "node --test tests/lib-keychain.mjs",
+    "test:manifest": "node --test tests/lib-manifest.mjs"
+  },
+  "keywords": ["morpheus", "ai", "inference", "decentralized", "openclaw", "everclaw"],
+  "license": "MIT"
 }
