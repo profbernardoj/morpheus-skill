@@ -331,6 +331,39 @@ The encrypted file fallback uses **AES-256-GCM** with keys derived from your pas
 
 For Docker/CI, set `EVERCLAW_WALLET_PASSPHRASE` or `EVERCLAW_WALLET_PASSPHRASE_FILE` environment variables.
 
+### Security Tiers
+
+EverClaw configures OpenClaw's exec-approval system with one of three security presets:
+
+| Tier | Emoji | What's auto-allowed | What's blocked |
+|------|-------|--------------------|-----------------|
+| **Low Security** | 🟢 | Read-only + dev tools (node, git, curl, etc.) | rm, docker, ssh, sudo, dd |
+| **Recommended** | 🟡 | Same as Low + inline eval blocked | rm, docker, ssh, sudo, dd, python3 -c, node -e |
+| **Maximum Protection** | 🔴 | Read-only only (ls, cat, grep, find, echo) | Everything else requires approval |
+
+**All tiers** gate money operations (MOR approvals, ETH transfers, key export) at the application layer via `everclaw-wallet.mjs`.
+
+**Set during install:**
+```bash
+node scripts/setup.mjs --apply --security-tier recommended
+```
+
+**Change after install:**
+```bash
+node scripts/security-tier.mjs --tier maximum --apply
+```
+
+**Check current tier:**
+```bash
+node scripts/security-tier.mjs --status
+```
+
+**Docker/CI:**
+```bash
+# Set via environment variable (defaults to 'recommended' when EVERCLAW_YES=1)
+EVERCLAW_SECURITY_TIER=low|recommended|maximum
+```
+
 ---
 
 ## Troubleshooting

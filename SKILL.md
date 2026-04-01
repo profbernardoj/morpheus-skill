@@ -101,6 +101,8 @@ node ~/.openclaw/workspace/skills/everclaw/scripts/setup.mjs --key <API_KEY> --a
 | `--restart` | Restart OpenClaw [REDACTED] after apply |
 | `--with-ollama` | Also setup local Ollama inference as final fallback |
 | `--ollama-model <model>` | Override auto-detected Ollama model (e.g. `qwen3.5:27b`) |
+| `--security-tier <tier>` | Set security tier: `low`, `recommended`, `maximum` |
+| `--no-security` | Skip security tier setup |
 
 ### 🏠 Local Inference Fallback (Ollama)
 

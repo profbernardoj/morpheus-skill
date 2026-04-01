@@ -1,0 +1,55 @@
+{
+  "$schema": "everclaw-security-tier-v1",
+  "tier": "maximum",
+  "label": "🔴 Maximum Protection",
+  "shortLabel": "Maximum Protection",
+  "description": "Everything asks unless explicitly safe-listed — maximum oversight",
+  "config": {
+    "security": "allowlist",
+    "ask": "on-miss",
+    "askFallback": "deny",
+    "autoAllowSkills": false,
+    "strictInlineEval": true,
+    "safeBins": ["cut", "uniq", "head", "tail", "tr", "wc", "sort"],
+    "safeBinTrustedDirs": ["/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/local/bin"],
+    "safeBinProfiles": {
+      "cut": {},
+      "head": {},
+      "tail": {},
+      "tr": {},
+      "uniq": {},
+      "wc": { "deniedFlags": ["--files0-from"] },
+      "sort": { "deniedFlags": ["-o", "--output"] }
+    }
+  },
+  "bins": [
+    "ls", "cat", "echo", "pwd", "date", "head", "tail", "wc", "sort", "uniq",
+    "cut", "tr", "grep", "find", "file", "stat", "basename", "dirname",
+    "realpath", "whoami", "uname", "hostname", "df", "ps", "which", "printf",
+    "du", "diff", "test", "expr", "comm", "nl", "column", "paste", "less",
+    "more", "seq",
+    "bash", "sh", "zsh"
+  ],
+  "macBins": [
+    "sw_vers", "sysctl"
+  ],
+  "linuxBins": [],
+  "blocked": [
+    "rm", "rmdir", "ssh", "scp", "sudo", "osascript", "docker",
+    "docker-compose", "dd", "node", "npm", "npx", "python3", "curl",
+    "git", "make", "gh", "brew", "rg", "sed", "awk", "xargs", "tee",
+    "tar", "zip", "unzip", "gzip", "gunzip", "jq", "touch", "mktemp",
+    "mkdir", "cp", "mv", "ln", "chmod", "env", "openclaw", "ollama",
+    "open", "security", "launchctl", "pbcopy", "pbpaste", "defaults",
+    "plutil", "mdls", "mdfind", "xattr", "system_profiler", "openssl",
+    "xdg-open", "systemctl", "journalctl"
+  ],
+  "notes": [
+    "Only read-only diagnostic commands are auto-allowed",
+    "All dev tools (node, git, curl, etc.) require manual approval each time",
+    "autoAllowSkills is false — even skill CLIs must be in the allowlist",
+    "Money operations gated at application layer (everclaw-wallet.mjs)",
+    "strictInlineEval blocks python3 -c, node -e even though binaries are allowlisted",
+    "rm excluded from all tiers — use trash for recoverable deletes"
+  ]
+}

@@ -36,6 +36,7 @@
 #   TZ                        — Timezone for the agent (default: UTC, e.g. America/New_York)
 #   EVERCLAW_DEFAULT_MODEL    — Default AI model (default: glm-5)
 #   EVERCLAW_AUTH_TOKEN       — Legacy alias for proxy auth (default: morpheus-local)
+#   EVERCLAW_SECURITY_TIER    — Security tier: low|recommended|maximum (default: recommended)
 #   WALLET_PRIVATE_KEY        — For local P2P staking (optional, use secrets in production)
 #   OPENCLAW_ENABLE_DEVICE_AUTH=true — Re-enable device auth (default: disabled for containers)
 

@@ -6,6 +6,7 @@
  * Stage 1: Detects OS, picks template, loads it.
  * Stage 2: Finds openclaw.json, deep-merges providers, writes on --apply.
  * Stage 3: Updates auth-profiles.json, --test pings gateway, --restart restarts.
+ * Stage 4: Configures security tier (exec-approvals.json + safeBins).
  *
  * Usage:
  *   node scripts/setup.mjs                              # Dry-run (auto-detect OS)
@@ -15,14 +16,17 @@
  *   node scripts/setup.mjs --test                       # Test gateway connectivity
  *   node scripts/setup.mjs --restart                    # Restart OpenClaw after apply
  *   node scripts/setup.mjs --with-ollama                # Also setup local Ollama fallback
+ *   node scripts/setup.mjs --security-tier <tier>       # Set security tier (low|recommended|maximum)
  *   node scripts/setup.mjs --help
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, createReadStream } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { platform } from 'os';
 import { execSync } from 'child_process';
+import { createInterface } from 'readline';
+import { resolveBins, getPlatformBins } from './lib/detect-bins.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = join(__dirname, '..', 'templates');
@@ -340,6 +344,159 @@ function restartGateway() {
   }
 }
 
+// ─── Security Tier Setup ─────────────────────────────────────────
+
+const VALID_TIERS = ['low', 'recommended', 'maximum'];
+
+function loadTierTemplate(tier) {
+  const file = `exec-approvals-${tier}.json`;
+  const tplPath = join(TEMPLATES_DIR, file);
+  if (!existsSync(tplPath)) {
+    console.error(`  ❌ Security tier template not found: ${tplPath}`);
+    return null;
+  }
+  return JSON.parse(readFileSync(tplPath, 'utf-8'));
+}
+
+/**
+ * Prompt the user to select a security tier interactively.
+ * Returns the chosen tier name or null if non-interactive.
+ */
+async function promptSecurityTier() {
+  const isCI = process.env.EVERCLAW_YES === '1' || !process.stdin.isTTY;
+  if (isCI) return null;
+
+  console.log('');
+  console.log('  ╔═══════════════════════════════════════════════════════════╗');
+  console.log('  ║                    EverClaw Security Setup                ║');
+  console.log('  ╠═══════════════════════════════════════════════════════════╣');
+  console.log('  ║                                                          ║');
+  console.log('  ║  EverClaw can run shell commands on your machine.         ║');
+  console.log('  ║  Choose how much approval you want for potentially        ║');
+  console.log('  ║  sensitive operations.                                    ║');
+  console.log('  ║                                                          ║');
+  console.log('  ║  1. 🟢 Low Security                                      ║');
+  console.log('  ║     Fastest for daily dev. Money operations gated at     ║');
+  console.log('  ║     app layer. rm, docker, ssh still blocked.            ║');
+  console.log('  ║                                                          ║');
+  console.log('  ║  2. 🟡 Recommended                                       ║');
+  console.log('  ║     Best balance. Blocks deploys, destructive ops,       ║');
+  console.log('  ║     and inline eval. Good for most users.                ║');
+  console.log('  ║                                                          ║');
+  console.log('  ║  3. 🔴 Maximum Protection                                ║');
+  console.log('  ║     Everything asks unless explicitly safe-listed.        ║');
+  console.log('  ║     Read-only routines still allowed. Maximum oversight.  ║');
+  console.log('  ║                                                          ║');
+  console.log('  ╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question('  Choose your security tier (1/2/3) [default: 2]: ', (answer) => {
+      rl.close();
+      const choice = answer.trim();
+      if (choice === '1' || choice === 'low') resolve('low');
+      else if (choice === '3' || choice === 'maximum') resolve('maximum');
+      else resolve('recommended'); // default
+    });
+  });
+}
+
+/**
+ * Generate exec-approvals.json from a tier template with auto-detected binary paths.
+ */
+function generateExecApprovals(template) {
+  const allBins = getPlatformBins(template.bins, template.macBins || [], template.linuxBins || []);
+  const { found, missing, warnings } = resolveBins(allBins, { verbose: false });
+
+  if (missing.length > 0) {
+    console.log(`  ⚠️  ${missing.length} binaries not found (skipped): ${missing.join(', ')}`);
+  }
+
+  const allowlist = found.map(({ name, path }) => ({
+    pattern: path,
+    _name: name,
+  }));
+
+  return {
+    version: 1,
+    generatedBy: 'everclaw-setup-v1',
+    generatedAt: new Date().toISOString(),
+    tier: template.tier,
+    tierLabel: template.label,
+    defaults: {
+      security: template.config.security,
+      ask: template.config.ask,
+      askFallback: template.config.askFallback,
+      autoAllowSkills: template.config.autoAllowSkills,
+    },
+    agents: {
+      main: {
+        security: template.config.security,
+        ask: template.config.ask,
+        askFallback: template.config.askFallback,
+        autoAllowSkills: template.config.autoAllowSkills,
+        allowlist,
+      },
+    },
+  };
+}
+
+/**
+ * Apply a security tier: write exec-approvals.json and patch openclaw.json.
+ * Respects upgrade safety — never overwrites user-customized files.
+ */
+function applySecurityTier(tierName, configPath, options = {}) {
+  const { force = false } = options;
+  const template = loadTierTemplate(tierName);
+  if (!template) return false;
+
+  console.log(`\n  ─── Security Tier: ${template.label} ─────────────────────────────`);
+  console.log(`  ${template.description}`);
+  console.log('  Detecting binaries...');
+
+  const approvals = generateExecApprovals(template);
+  const openclawDir = dirname(configPath);
+  const approvalsPath = join(openclawDir, 'exec-approvals.json');
+
+  // Upgrade safety check
+  if (existsSync(approvalsPath) && !force) {
+    const existing = JSON.parse(readFileSync(approvalsPath, 'utf-8'));
+    if (!existing.generatedBy) {
+      console.log('  ⚠️  exec-approvals.json exists but was not generated by EverClaw.');
+      console.log('  Preserving your customizations. Use --force to override.');
+      return false;
+    }
+    if (existing.generatedBy !== 'everclaw-setup-v1') {
+      console.log(`  ⚠️  exec-approvals.json was generated by: ${existing.generatedBy}`);
+      console.log('  Preserving it. Use --force to override.');
+      return false;
+    }
+    // Generated by us — safe to overwrite
+    backupBeforeWrite(approvalsPath);
+  }
+
+  // Write exec-approvals.json
+  writeFileSync(approvalsPath, JSON.stringify(approvals, null, 2) + '\n');
+  console.log(`  ✅ Written: ${approvalsPath}`);
+  console.log(`     Allowlist: ${approvals.agents.main.allowlist.length} binaries`);
+
+  // Patch openclaw.json with safeBins + strictInlineEval
+  if (existsSync(configPath)) {
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    if (!config.tools) config.tools = {};
+    if (!config.tools.exec) config.tools.exec = {};
+    config.tools.exec.safeBins = template.config.safeBins;
+    config.tools.exec.safeBinTrustedDirs = template.config.safeBinTrustedDirs;
+    config.tools.exec.safeBinProfiles = template.config.safeBinProfiles;
+    config.tools.exec.strictInlineEval = template.config.strictInlineEval;
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    console.log(`  ✅ Patched: ${configPath} (safeBins, strictInlineEval)`);
+  }
+
+  return true;
+}
+
 function printUsage() {
   console.log(`
 ♾️  Everclaw Setup
@@ -357,13 +514,15 @@ Templates:
   gateway-only   Simplest — mor-gateway only (no local proxy)
 
 Flags:
-  --key <key>    Your Morpheus API Gateway key (from app.mor.org)
-  --apply        Actually write the merged config (default is dry-run)
-  --test         Test gateway connectivity after setup
-  --restart      Restart OpenClaw gateway after apply
-  --template     Override OS auto-detection
-  --with-ollama  Also setup local Ollama inference fallback
-  --ollama-model Override auto-detected Ollama model (e.g. qwen3.5:27b)
+  --key <key>      Your Morpheus API Gateway key (from app.mor.org)
+  --apply          Actually write the merged config (default is dry-run)
+  --test           Test gateway connectivity after setup
+  --restart        Restart OpenClaw gateway after apply
+  --template       Override OS auto-detection
+  --with-ollama    Also setup local Ollama inference fallback
+  --ollama-model   Override auto-detected Ollama model (e.g. qwen3.5:27b)
+  --security-tier  Set security tier (low|recommended|maximum)
+  --no-security    Skip security tier prompt
 `);
 }
 
@@ -388,6 +547,8 @@ const testMode = args.includes('--test');
 const restartMode = args.includes('--restart');
 const withOllama = args.includes('--with-ollama');
 const ollamaModel = getArg('--ollama-model');
+const securityTierArg = getArg('--security-tier');
+const noSecurity = args.includes('--no-security');
 
 // ─── Stage 1: Template Discovery ───────────────────────────────
 
@@ -514,6 +675,36 @@ if (applyMode) {
     }
   } catch (e) {
     console.log(`  ⚠️  Ollama migration check failed (not fatal): ${e.message}`);
+  }
+
+  // ─── Stage 4: Security Tier ───────────────────────────────────────
+
+  if (!noSecurity) {
+    let tier = securityTierArg;
+
+    // Docker / CI: use env var or default to 'recommended'
+    if (!tier && process.env.EVERCLAW_SECURITY_TIER) {
+      tier = process.env.EVERCLAW_SECURITY_TIER;
+    }
+
+    // Interactive prompt if no tier specified
+    if (!tier) {
+      tier = await promptSecurityTier();
+    }
+
+    // CI with no tier specified: default to recommended
+    if (!tier) {
+      tier = 'recommended';
+    }
+
+    if (VALID_TIERS.includes(tier)) {
+      applySecurityTier(tier, configPath);
+    } else {
+      console.log(`  ⚠️  Invalid security tier: "${tier}" — skipped.`);
+      console.log(`  Valid tiers: ${VALID_TIERS.join(', ')}`);
+    }
+  } else {
+    console.log('\n  ─── Security tier skipped (--no-security) ────────────────');
   }
 
   // Test gateway if requested

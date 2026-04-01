@@ -1,0 +1,59 @@
+{
+  "$schema": "everclaw-security-tier-v1",
+  "tier": "recommended",
+  "label": "🟡 Recommended",
+  "shortLabel": "Recommended",
+  "description": "Best balance — blocks deploys, destructive ops, and inline eval",
+  "config": {
+    "security": "allowlist",
+    "ask": "on-miss",
+    "askFallback": "deny",
+    "autoAllowSkills": true,
+    "strictInlineEval": true,
+    "safeBins": ["cut", "uniq", "head", "tail", "tr", "wc", "sort"],
+    "safeBinTrustedDirs": ["/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/local/bin"],
+    "safeBinProfiles": {
+      "cut": {},
+      "head": {},
+      "tail": {},
+      "tr": {},
+      "uniq": {},
+      "wc": { "deniedFlags": ["--files0-from"] },
+      "sort": { "deniedFlags": ["-o", "--output"] }
+    }
+  },
+  "bins": [
+    "ls", "cat", "echo", "pwd", "date", "head", "tail", "wc", "sort", "uniq",
+    "cut", "tr", "grep", "find", "file", "stat", "basename", "dirname",
+    "realpath", "whoami", "uname", "hostname", "df", "ps", "which", "printf",
+    "du", "diff", "test", "expr", "comm", "nl", "column", "paste", "less",
+    "more", "seq",
+    "bash", "sh", "zsh",
+    "node", "npm", "npx", "git", "python3", "curl", "jq", "make", "gh",
+    "brew", "rg", "sed", "awk", "xargs", "tee", "tar", "zip", "unzip",
+    "gzip", "gunzip", "shasum", "md5", "xxd", "touch", "mktemp", "mkdir",
+    "cp", "mv", "ln", "chmod", "sleep", "env",
+    "openclaw", "ollama"
+  ],
+  "macBins": [
+    "open", "security", "launchctl", "pbcopy", "pbpaste", "sw_vers",
+    "defaults", "plutil", "mdls", "mdfind", "xattr", "sysctl",
+    "system_profiler", "openssl"
+  ],
+  "linuxBins": [
+    "xdg-open", "systemctl", "journalctl"
+  ],
+  "blocked": [
+    "rm", "rmdir", "ssh", "scp", "sudo", "osascript", "docker",
+    "docker-compose", "dd"
+  ],
+  "notes": [
+    "Same allowlist as Low — the difference is git push is NOT subcommand-gated here",
+    "For git push blocking, see the note below about future subcommand gating",
+    "Money operations gated at application layer (everclaw-wallet.mjs)",
+    "strictInlineEval blocks python3 -c, node -e even though binaries are allowlisted",
+    "rm excluded from all tiers — use trash for recoverable deletes",
+    "dd excluded — too dangerous for auto-approval",
+    "Future: subcommand gating (git push, docker build) when OpenClaw supports it"
+  ]
+}

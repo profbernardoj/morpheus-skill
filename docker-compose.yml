@@ -43,6 +43,8 @@ services:
       - EVERCLAW_AUTH_TOKEN=${EVERCLAW_AUTH_TOKEN:-morpheus-local}
       # Morpheus API Gateway (for cloud inference — get a key at app.mor.org)
       - MOR_GATEWAY_API_KEY=${MOR_GATEWAY_API_KEY:-}
+      # Security tier: low | recommended | maximum (default: recommended)
+      - EVERCLAW_SECURITY_TIER=${EVERCLAW_SECURITY_TIER:-recommended}
       # For P2P staking mode (optional)
       # - MORPHEUS_ROUTER_URL=http://host.docker.internal:8082
       # - ETH_NODE_ADDRESS=https://base-mainnet.public.blastapi.io
