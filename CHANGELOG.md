@@ -2,6 +2,23 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.2.0002] - 2026-04-02
+
+### Fixed — Exec Approval Fatigue
+- **Config templates now set `tools.exec.ask: "off"`** — All 3 config templates (mac, linux, gateway-only) now include `tools.exec` settings so new installs don't default to prompting on every command.
+- **Low Security tier: `ask` changed from `on-miss` to `off`** — Low tier users should never see exec approval prompts. Commands run freely; money operations remain gated at the application layer.
+- **`strictInlineEval` set to `false` on Low and Recommended tiers** — `node -e`, `python3 -c` no longer trigger separate approval prompts on Low or Recommended tiers.
+- **Bug fix: `security-tier.mjs` now writes `ask` to `openclaw.json`** — The `ask` value from tier templates was only written to `exec-approvals.json`, not to `openclaw.json`'s `tools.exec` section. New installs and tier changes now correctly propagate the `ask` setting.
+
+### Security Tier Summary
+| Tier | `ask` | `strictInlineEval` | Effect |
+|------|-------|--------------------|--------|
+| Low | `off` | `false` | No prompts. All commands run freely. |
+| Recommended | `on-miss` | `false` | Prompts for unknown commands only. |
+| Maximum | `on-miss` | `true` | Prompts for unknown + inline eval. |
+
+---
+
 ## [2026.4.1.1923] - 2026-04-01
 
 ### Code Quality — Issue #13 Enhancements (5A-5D)

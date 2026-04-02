@@ -103,6 +103,7 @@ function generateExecApprovals(template) {
   const openclawPatch = {
     tools: {
       exec: {
+        ask: template.config.ask,
         safeBins: template.config.safeBins,
         safeBinTrustedDirs: template.config.safeBinTrustedDirs,
         safeBinProfiles: template.config.safeBinProfiles,

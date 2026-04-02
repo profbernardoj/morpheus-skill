@@ -9,7 +9,7 @@
     "ask": "on-miss",
     "askFallback": "deny",
     "autoAllowSkills": true,
-    "strictInlineEval": true,
+    "strictInlineEval": false,
     "safeBins": ["cut", "uniq", "head", "tail", "tr", "wc", "sort"],
     "safeBinTrustedDirs": ["/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/local/bin"],
     "safeBinProfiles": {
@@ -51,7 +51,7 @@
     "Same allowlist as Low — the difference is git push is NOT subcommand-gated here",
     "For git push blocking, see the note below about future subcommand gating",
     "Money operations gated at application layer (everclaw-wallet.mjs)",
-    "strictInlineEval blocks python3 -c, node -e even though binaries are allowlisted",
+    "strictInlineEval=false: python3 -c, node -e run without separate approval",
     "rm excluded from all tiers — use trash for recoverable deletes",
     "dd excluded — too dangerous for auto-approval",
     "Future: subcommand gating (git push, docker build) when OpenClaw supports it"

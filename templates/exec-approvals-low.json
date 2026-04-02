@@ -6,10 +6,10 @@
   "description": "Fastest for daily dev — money operations gated at app layer",
   "config": {
     "security": "allowlist",
-    "ask": "on-miss",
+    "ask": "off",
     "askFallback": "deny",
     "autoAllowSkills": true,
-    "strictInlineEval": true,
+    "strictInlineEval": false,
     "safeBins": ["cut", "uniq", "head", "tail", "tr", "wc", "sort"],
     "safeBinTrustedDirs": ["/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/local/bin"],
     "safeBinProfiles": {
@@ -50,7 +50,8 @@
   "notes": [
     "git is allowlisted (includes git push — subcommand gating not supported at exec layer)",
     "Money operations gated at application layer (everclaw-wallet.mjs)",
-    "strictInlineEval blocks python3 -c, node -e even though binaries are allowlisted",
+    "ask=off: no exec approval prompts — all commands run freely",
+    "strictInlineEval=false: python3 -c, node -e run without separate approval",
     "rm excluded from all tiers — use trash for recoverable deletes",
     "dd excluded — too dangerous for auto-approval"
   ]
