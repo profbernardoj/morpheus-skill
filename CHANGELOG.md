@@ -2,6 +2,11 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.2.2031] - 2026-04-02
+
+### Changed
+- **OpenClaw pinned version bumped: v2026.4.1 → v2026.4.2** — Docker images now build with OpenClaw v2026.4.2. Key upstream fixes: exec defaults YOLO mode, subagent spawn loopback fix, exec-approvals config hardening, gateway exec loopback restoration.
+
 ## [2026.4.2.1957] - 2026-04-02
 
 ### Added
