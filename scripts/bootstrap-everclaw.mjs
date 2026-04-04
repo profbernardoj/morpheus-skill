@@ -176,14 +176,41 @@ async function requestKey(fingerprint, version) {
   });
   
   try {
+    // Use -w to capture HTTP status code separately
     const result = execSync(
-      `curl -s -m ${CONFIG.timeout / 1000} -X POST "${url}" ` +
+      `curl -s -w '\n%{http_code}' -m ${CONFIG.timeout / 1000} -X POST "${url}" ` +
       `-H "Content-Type: application/json" ` +
       `-d '${body.replace(/'/g, "'\\''")}'`,
       { timeout: CONFIG.timeout + 5000, encoding: 'utf-8' }
     );
     
-    const data = JSON.parse(result);
+    // Split response body from HTTP status code
+    const lines = result.trimEnd().split('\n');
+    const statusStr = lines.pop()?.trim() ?? '';
+    const httpStatus = parseInt(statusStr, 10);
+    const responseBody = lines.join('\n').trim();
+    
+    if (isNaN(httpStatus)) {
+      throw new Error(`Failed to parse HTTP status from curl output. Raw: ${result.slice(0, 300)}`);
+    }
+    
+    // Check HTTP status before parsing JSON
+    if (httpStatus >= 500) {
+      throw new Error(`Key server returned HTTP ${httpStatus} (server error). The service may be temporarily down — try again in a few minutes.`);
+    }
+    if (httpStatus >= 400) {
+      throw new Error(`Key server returned HTTP ${httpStatus}: ${responseBody.slice(0, 200)}`);
+    }
+    if (!responseBody) {
+      throw new Error('Key server returned an empty response');
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(responseBody);
+    } catch (parseErr) {
+      throw new Error(`Key server returned non-JSON response (HTTP ${httpStatus}): ${responseBody.slice(0, 200)}`);
+    }
     
     if (data.error) {
       throw new Error(`API error: ${data.error}`);
@@ -380,14 +407,38 @@ async function testKey(apiKey) {
   
   try {
     const result = execSync(
-      `curl -s -m ${CONFIG.timeout / 1000} -X POST "${url}" ` +
-      `-H "Authorization: Bearer ${apiKey}" ` +
+      `curl -s -w '\n%{http_code}' -m ${CONFIG.timeout / 1000} -X POST "${url}" ` +
+      `-H "Authorization: Bearer ${apiKey.replace(/"/g, '\\"')}" ` +
       `-H "Content-Type: application/json" ` +
       `-d '${body.replace(/'/g, "'\\''")}'`,
       { timeout: CONFIG.timeout + 5000, encoding: 'utf-8' }
     );
     
-    const data = JSON.parse(result);
+    const lines = result.trimEnd().split('\n');
+    const statusStr = lines.pop()?.trim() ?? '';
+    const httpStatus = parseInt(statusStr, 10);
+    const responseBody = lines.join('\n').trim();
+    
+    if (isNaN(httpStatus)) {
+      return { ok: false, error: `Failed to parse HTTP status from curl output. Raw: ${result.slice(0, 300)}` };
+    }
+    
+    if (httpStatus >= 500) {
+      return { ok: false, error: `Inference gateway returned HTTP ${httpStatus} (server error)` };
+    }
+    if (httpStatus >= 400) {
+      return { ok: false, error: `Inference gateway returned HTTP ${httpStatus}: ${responseBody.slice(0, 200)}` };
+    }
+    if (!responseBody) {
+      return { ok: false, error: 'Inference gateway returned an empty response' };
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(responseBody);
+    } catch (parseErr) {
+      return { ok: false, error: `Non-JSON response (HTTP ${httpStatus}): ${responseBody.slice(0, 200)}` };
+    }
     
     if (data.error) {
       return { ok: false, error: data.error.message || data.error };
