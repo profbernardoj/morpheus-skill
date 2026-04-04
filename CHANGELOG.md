@@ -2,6 +2,19 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.4.1912] - 2026-04-04
+
+### Fixed — Bootstrap Error Handling
+- **`bootstrap-everclaw.mjs` no longer crashes on non-JSON server responses** — Both `requestKey()` and `testKey()` now capture the HTTP status code via `curl -w '%{http_code}'` and check for 4xx/5xx before attempting `JSON.parse`. Previously, a 502 from Cloudflare (plain text `error code: 502`) caused a confusing `Unexpected token 'e'` crash. Users now see: `Key server returned HTTP 502 (server error). The service may be temporarily down — try again in a few minutes.`
+- **NaN guard on HTTP status parsing** — If curl produces no parseable status code (corrupt output, edge-case failure), the code now fails with a clear diagnostic instead of silently falling through to JSON parsing.
+- **Shell injection safety in `testKey()`** — Bearer token in the Authorization header is now escaped (`apiKey.replace(/"/g, '\\"')`) to prevent shell injection if a key ever contains special characters.
+
+### Changed
+- Error messages in both functions now consistently truncate response bodies to 200 characters for debugging.
+- `testKey()` catch block uses named `catch (parseErr)` for consistency with `requestKey()`.
+
+---
+
 ## [2026.4.4.0403] - 2026-04-04
 
 ### Changed — Local Inference: Qwen3.5 → Gemma 4
