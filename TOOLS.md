@@ -35,10 +35,14 @@ Things like:
 
 - **Binary:** `/Applications/Ollama.app` + CLI at `/opt/homebrew/bin/ollama`
 - **Server:** `http://127.0.0.1:11434` (OpenAI-compatible at `/v1/`)
-- **Model:** `qwen3.5:9b` (6.6GB, Qwen3.5 9B parameter)
+- **Version:** 0.20.0 (updated 2026-04-03)
+- **Models:**
+  - `gemma4-26b-q3` — Gemma 4 26B MoE (Q3_K_M, 12GB) — primary local fallback, GLM-5 class quality, supports vision
+  - `qwen3.5:9b` (6.6GB, Qwen3.5 9B) — lightweight last-resort fallback
 - **Auto-start:** launchd `com.ollama.ollama` (KeepAlive)
-- **Purpose:** Last-resort fallback — runs locally on Apple M4 Metal GPU, zero network dependency
-- **Installed:** 2026-03-11
+- **Purpose:** Local fallback — runs on Apple M4 Metal GPU, zero network dependency
+- **Note:** Gemma 4 26B MoE is custom GGUF from Unsloth (Q3_K_M quant). Created via Modelfile from `/tmp/gemma4-26b-q3km.gguf`. The official `gemma4:26b` (17GB Q4) OOM kills on 16GB RAM — Q3_K_M (12GB) fits with ~3.5GB headroom.
+- **Ollama updated:** 2026-04-03 (0.17.7 → 0.20.0, needed for Gemma 4 support)
 
 ## Why Separate?
 
