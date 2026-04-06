@@ -38,6 +38,7 @@ NC='\033[0m' # No Color
 CHECK_ONLY=false
 SKIP_OPENCLAW=false
 SKIP_OLLAMA=false
+FORCE_OLLAMA=false
 SKIP_PROXY=false
 
 # Hardware detection results (set by detect_hardware)
@@ -70,6 +71,10 @@ for arg in "$@"; do
       SKIP_OLLAMA=true
       shift
       ;;
+    --ollama-already-installed)
+      FORCE_OLLAMA=true
+      shift
+      ;;
     --skip-proxy)
       SKIP_PROXY=true
       shift
@@ -84,8 +89,9 @@ for arg in "$@"; do
       echo "Options:"
       echo "  --check-only      Show what would happen, don't install"
       echo "  --skip-openclaw   Skip OpenClaw installation check"
-      echo "  --skip-ollama     Skip local Ollama installation"
-      echo "  --skip-proxy      Skip Morpheus proxy-router installation"
+      echo "  --skip-ollama              Skip local Ollama installation"
+      echo "  --ollama-already-installed  Mark Ollama as installed (skip detection)"
+      echo "  --skip-proxy               Skip Morpheus proxy-router installation"
       echo "  --auto-install    Legacy flag (now default behavior)"
       echo "  --help            Show this help message"
       exit 0
@@ -616,7 +622,7 @@ else
   mkdir -p "$HOME/.openclaw/workspace/skills"
   cd "$HOME/.openclaw/workspace/skills"
 
-  git clone https://github.com/EverClaw/EverClaw.git everclaw || {
+  git clone --quiet https://github.com/EverClaw/EverClaw.git everclaw || {
     log_err "Failed to clone EverClaw repository"
     log "Check your internet connection and try again."
     exit 1
@@ -708,15 +714,40 @@ echo ""
 
 OLLAMA_INSTALLED=false
 
+# detect_ollama — check multiple install methods (PATH, Homebrew, DMG, running server)
+detect_ollama() {
+  if command -v ollama &>/dev/null; then
+    log_ok "Ollama detected (binary in PATH)"
+    return 0
+  elif [[ -x /opt/homebrew/bin/ollama ]]; then
+    log_ok "Ollama detected via Homebrew (/opt/homebrew/bin)"
+    return 0
+  elif [[ -x /usr/local/bin/ollama ]]; then
+    log_ok "Ollama detected at /usr/local/bin"
+    return 0
+  elif [[ -d /Applications/Ollama.app ]]; then
+    log_ok "Ollama.app detected (DMG install)"
+    return 0
+  elif curl -sf --max-time 2 http://127.0.0.1:11434/api/version &>/dev/null; then
+    log_ok "Ollama server running on port 11434"
+    return 0
+  else
+    return 1
+  fi
+}
+
 if [[ "$SKIP_OLLAMA" == true ]]; then
   log_skip "Local Ollama (--skip-ollama)"
-elif command -v ollama &>/dev/null; then
-  # Ollama binary exists — check if it's configured in OpenClaw
+elif [[ "$FORCE_OLLAMA" == true ]]; then
+  log_ok "Ollama marked as installed (--ollama-already-installed)"
+  OLLAMA_INSTALLED=true
+elif detect_ollama; then
+  # Ollama found — check if it's configured in OpenClaw
   local_config="$HOME/.openclaw/openclaw.json"
   if [[ -f "$local_config" ]] && command -v jq &>/dev/null && jq -e '.models.providers.ollama' "$local_config" >/dev/null 2>&1; then
-    log_ok "Local Ollama already installed and configured"
+    log "Already configured in OpenClaw"
   else
-    log_ok "Ollama installed but not yet configured in OpenClaw"
+    log "Ollama installed but not yet configured in OpenClaw"
     log "Running setup-ollama.sh to configure..."
     if [[ -f "$INSTALL_DIR/scripts/setup-ollama.sh" ]]; then
       bash "$INSTALL_DIR/scripts/setup-ollama.sh" --apply 2>&1 | tail -20 || {
@@ -892,6 +923,24 @@ echo ""
 log "Test inference:   node $INSTALL_DIR/scripts/bootstrap-everclaw.mjs --test"
 log "Check status:     bash $INSTALL_DIR/scripts/diagnose.sh"
 log "Get your own key: https://app.mor.org"
+
+echo ""
+echo -e "${BOLD}✅ EverClaw successfully installed to:${NC}"
+log "$INSTALL_DIR"
+echo ""
+
+echo -e "${BOLD}  Import your existing inference key:${NC}"
+echo ""
+echo "  1. Recommended (easiest):"
+echo "     cd \"$INSTALL_DIR\""
+echo "     npm run bootstrap -- --key sk-XXXXXXXXXXXXXXXX"
+echo ""
+echo "  2. Absolute path (works from anywhere):"
+echo "     node \"$INSTALL_DIR/scripts/bootstrap-gateway.mjs\" --key sk-XXXXXXXXXXXXXXXX"
+echo ""
+echo "  3. With environment variable (works from anywhere):"
+echo "     EVERCLAW_KEY=sk-XXXXXXXXXXXXXXXX node \"$INSTALL_DIR/scripts/bootstrap-gateway.mjs\""
+
 echo ""
 echo -e "${CYAN}  ♾️  Own your inference. Forever.${NC}"
 echo ""

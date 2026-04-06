@@ -15,6 +15,7 @@
 set -uo pipefail
 
 # ─── Configuration ───────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw}"
 OPENCLAW_CONFIG="$OPENCLAW_DIR/openclaw.json"
 AUTH_PROFILES="$OPENCLAW_DIR/agents/main/agent/auth-profiles.json"
@@ -107,7 +108,7 @@ print('\n'.join(bad))
       info "  $line"
     done <<< "$everclaw_refs"
     fix "Change to mor-gateway/kimi-k2.5 or morpheus/kimi-k2.5"
-    fix "Auto-fix: node scripts/bootstrap-gateway.mjs"
+    fix "Auto-fix: node $SCRIPT_DIR/bootstrap-gateway.mjs"
   else
     pass "No 'everclaw/' provider prefix"
   fi
@@ -126,7 +127,7 @@ print(' '.join(morpheus) if morpheus else '')
     pass "Morpheus provider(s) configured: $providers"
   else
     fail "No Morpheus provider (morpheus or mor-gateway) in config"
-    fix "Run: node scripts/bootstrap-gateway.mjs"
+    fix "Run: node $SCRIPT_DIR/bootstrap-gateway.mjs"
   fi
 
   # A4: Is a Morpheus model in the fallback chain?

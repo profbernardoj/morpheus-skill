@@ -495,7 +495,7 @@ async function cmdSetup() {
   console.log('\n  To graduate to your own key:');
   console.log('     1. Go to https://app.mor.org');
   console.log('     2. Create an account and API key');
-  console.log('     3. Run: node scripts/bootstrap-gateway.mjs --key YOUR_KEY');
+  console.log(`     3. Run: node ${__dirname}/bootstrap-gateway.mjs --key YOUR_KEY`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
@@ -568,7 +568,7 @@ async function cmdRevoke() {
     console.log('\n  To set up your own Morpheus API key:');
     console.log('     1. Go to https://app.mor.org');
     console.log('     2. Create an API key');
-    console.log('     3. Run: node scripts/bootstrap-gateway.mjs --key YOUR_KEY\n');
+    console.log(`     3. Run: node ${__dirname}/bootstrap-gateway.mjs --key YOUR_KEY\n`);
   } else {
     console.log('  No bootstrap key found.\n');
   }

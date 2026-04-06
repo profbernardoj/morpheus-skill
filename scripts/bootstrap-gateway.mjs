@@ -25,6 +25,18 @@ import { homedir } from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// ─── Guard: detect wrong working directory (partial install or user error) ──
+if (!existsSync(join(__dirname, '..', 'SKILL.md'))) {
+  console.error('❌ Must run from the EverClaw directory.');
+  console.error('  Run from the EverClaw directory, or use the absolute path:');
+  const skillDir = join(__dirname, '..');
+  console.error(`    cd "${skillDir}"`);
+  console.error(`    npm run bootstrap -- --key sk-XXXXXXXXXXXXXXXX`);
+  console.error(`  Or from anywhere:`);
+  console.error(`    node "${__dirname}/bootstrap-gateway.mjs" --key sk-XXXXXXXXXXXXXXXX`);
+  process.exit(1);
+}
+
 // ─── Configuration ─────────────────────────────────────────────
 const GATEWAY_BASE_URL = 'https://api.mor.org/api/v1';
 const PROVIDER_NAME = 'mor-gateway';
@@ -293,7 +305,7 @@ async function cmdSetup(userKey) {
     console.log('     1. Go to https://app.mor.org');
     console.log('     2. Create an account and sign in');
     console.log('     3. Click "Create API Key" and enable automation');
-    console.log('     4. Run: node scripts/bootstrap-gateway.mjs --key YOUR_KEY');
+    console.log(`     4. Run: node ${__dirname}/bootstrap-gateway.mjs --key YOUR_KEY`);
   }
 
   console.log('\n  To restart OpenClaw with the new config:');
@@ -386,6 +398,6 @@ if (args.includes('--test')) {
   await cmdStatus();
 } else {
   const keyIdx = args.indexOf('--key');
-  const userKey = keyIdx >= 0 ? args[keyIdx + 1] : null;
+  const userKey = keyIdx >= 0 ? args[keyIdx + 1] : (process.env.EVERCLAW_KEY || null);
   await cmdSetup(userKey);
 }

@@ -2,6 +2,23 @@
 
 All notable changes to EverClaw are documented here.
 
+## [Unreleased] — Installer UX fixes (Jeff tester feedback)
+
+### Fixed
+- **Ollama detection false-negative** — Replaced single `command -v ollama` check with `detect_ollama()` function that checks 5 locations: PATH, Homebrew (`/opt/homebrew/bin`), `/usr/local/bin`, DMG (`/Applications/Ollama.app`), and running server on port 11434. Eliminates false "not installed" on Macs with non-PATH Ollama installs.
+- **Bootstrap key import `MODULE_NOT_FOUND`** — All user-facing instructions in `bootstrap-everclaw.mjs`, `bootstrap-gateway.mjs`, and `diagnose.sh` now print absolute paths instead of relative `node scripts/...` paths. Users can copy-paste commands from any directory.
+
+### Added
+- **`--ollama-already-installed` installer flag** — Power users can skip detection and mark Ollama as installed.
+- **`EVERCLAW_KEY` environment variable** — `bootstrap-gateway.mjs` accepts API key via env var (fallback when `--key` flag not provided). Useful for scripting/automation.
+- **`npm run bootstrap` convenience script** — Runs `bootstrap-gateway.mjs` from the skill directory.
+- **Guard clause in `bootstrap-gateway.mjs`** — Detects broken/partial installs (missing `SKILL.md`) and prints helpful instructions instead of a cryptic error.
+- **Post-install summary block** — Installer now prints 3 clear methods to import your own inference key (cd + npm, absolute path, env var) with the real install directory path.
+- **`SCRIPT_DIR` in `diagnose.sh`** — Fix commands now use absolute paths.
+
+### Changed
+- **Quiet git clone** — `git clone --quiet` eliminates noisy object enumeration output during install.
+
 ## [2026.4.6.1450] - 2026-04-06
 
 ### Changed

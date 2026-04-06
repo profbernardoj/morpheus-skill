@@ -9,7 +9,8 @@
     "test:encryption": "node --test tests/lib-encryption.mjs",
     "test:docker": "node --test tests/lib-docker.mjs",
     "test:keychain": "node --test tests/lib-keychain.mjs",
-    "test:manifest": "node --test tests/lib-manifest.mjs"
+    "test:manifest": "node --test tests/lib-manifest.mjs",
+    "bootstrap": "node scripts/bootstrap-gateway.mjs"
   },
   "keywords": [
     "morpheus",

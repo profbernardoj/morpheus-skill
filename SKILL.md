@@ -767,6 +767,7 @@ docker run -e EVERCLAW_WALLET_PASSPHRASE_FILE=/run/secrets/wallet_pass ...
 **Environment Variables:**
 | Variable | Description |
 |----------|-------------|
+| `EVERCLAW_KEY` | Morpheus API key for `bootstrap-gateway.mjs` (fallback when `--key` flag not provided) |
 | `EVERCLAW_WALLET_PASSPHRASE` | Wallet passphrase (takes priority over interactive prompt) |
 | `EVERCLAW_WALLET_PASSPHRASE_FILE` | Path to file containing passphrase (Docker secrets) |
 | `EVERCLAW_KEYCHAIN_ACCOUNT` | Keychain account name (default: `everclaw-agent`). Only `[A-Za-z0-9._-]` allowed. |
