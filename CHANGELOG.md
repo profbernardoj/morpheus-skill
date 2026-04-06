@@ -2,7 +2,7 @@
 
 All notable changes to EverClaw are documented here.
 
-## [Unreleased] — Installer UX fixes (Jeff tester feedback)
+## [2026.4.6.2309] - 2026-04-06 — Installer UX fixes (Jeff tester feedback)
 
 ### Fixed
 - **Ollama detection false-negative** — Replaced single `command -v ollama` check with `detect_ollama()` function that checks 5 locations: PATH, Homebrew (`/opt/homebrew/bin`), `/usr/local/bin`, DMG (`/Applications/Ollama.app`), and running server on port 11434. Eliminates false "not installed" on Macs with non-PATH Ollama installs.
