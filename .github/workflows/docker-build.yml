@@ -33,10 +33,8 @@ jobs:
           # Discover all flavor directories
           FLAVORS=$(ls -d templates/flavors/*/ 2>/dev/null | xargs -I{} basename {} | jq -R . | jq -s .)
           # Build matrix: generic (no flavor) + all discovered flavors
-          MATRIX=$(echo "$FLAVORS" | jq '[
-            {"flavor": "", "image_name": "everclaw/everclaw"},
-            (.[] | {"flavor": ., "image_name": ("everclaw/" + .)})
-          ]')
+          # Use -c (compact) to keep JSON on a single line for GITHUB_OUTPUT
+          MATRIX=$(echo "$FLAVORS" | jq -c '[{"flavor": "", "image_name": "everclaw/everclaw"}, (.[] | {"flavor": ., "image_name": ("everclaw/" + .)})]')
           echo "matrix={\"include\":$MATRIX}" >> $GITHUB_OUTPUT
           echo "Discovered $(echo "$FLAVORS" | jq 'length') flavors + 1 generic"
 
