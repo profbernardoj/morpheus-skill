@@ -4,6 +4,9 @@ All notable changes to EverClaw are documented here.
 
 ## [2026.4.8] - 2026-04-08 — MemPalace Enhanced Memory
 
+### Changed
+- **OpenClaw pin v2026.4.5 → v2026.4.8** — Dockerfile `OPENCLAW_VERSION` and `docker-compose.yml` `EVERCLAW_VERSION` env updated. SKILL.md version header and diagnostics examples updated to match.
+
 ### Added
 - **memory_search best practices in agent templates** — `AGENTS.template.md` now includes session-start search step with example query, "Recall Reflex" guide with example queries and query crafting tips, updated memory maintenance routine with `openclaw memory promote` (gated on dreaming being enabled). `SOUL.template.md` adds "Search before you speak" as a core truth. Both bumped to template-version 2026.4.8. Reviewed by Grok (2 rounds).
 - **MemPalace memory backend** — Optional upgrade layering ChromaDB vector search + temporal knowledge graph on top of OpenClaw's built-in `memory_search`. Dual embedding models (embeddinggemma-300m-qat 300M + all-MiniLM-L6-v2 22M) catch different semantic matches.
