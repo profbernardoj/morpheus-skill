@@ -2634,7 +2634,126 @@ When the restored agent boots and detects a migration note in today's daily memo
 
 ---
 
+## 23. Enhanced Memory with MemPalace (v2026.4.8)
+
+Optional upgrade to EverClaw's memory backend using [MemPalace](https://github.com/AiEnigma-Labs/MemPalace) — a local-first memory system with ChromaDB vector search, temporal knowledge graph, and hierarchical organization (wings/rooms/drawers).
+
+### Why MemPalace?
+
+- **Dual embedding models**: OpenClaw's built-in `memory_search` uses embeddinggemma-300m-qat (300M); MemPalace uses all-MiniLM-L6-v2 (22M). Different models catch different semantic matches.
+- **Temporal awareness**: Query what was known about an entity at a specific date (`as-of` queries).
+- **Wing/room hierarchy**: Organize memories by project, topic, or time period.
+- **Obsidian export**: Browse your agent's memory as a full Obsidian vault with wikilinks and frontmatter.
+- **Zero external APIs**: Everything runs locally. No data leaves the machine.
+
+### Install
+
+```bash
+pip install mempalace
+```
+
+### Migration (one-time import of existing memory files)
+
+```bash
+# Preview what will be imported
+node scripts/memory/migrate-to-mempalace.mjs --dry-run
+
+# Run the migration
+node scripts/memory/migrate-to-mempalace.mjs --wing agent
+```
+
+### Search (CLI)
+
+```bash
+# Search memories
+node scripts/memory/mempalace-search-hook.mjs search "wallet encryption" --wing everclaw
+
+# Get status
+node scripts/memory/mempalace-search-hook.mjs status
+
+# Wake-up context (identity + essential story)
+node scripts/memory/mempalace-search-hook.mjs wake-up
+```
+
+### Search (Module API)
+
+```javascript
+import { enhancedSearch, getStatus, getWakeUpContext, queryAsOf } from './scripts/memory/mempalace-search-hook.mjs';
+
+const results = await enhancedSearch('wallet encryption', { wing: 'everclaw', maxResults: 10 });
+const status = await getStatus();
+const context = await getWakeUpContext({ wing: 'agent' });
+const history = await queryAsOf('EverClaw', '2026-04-01');
+```
+
+### Obsidian Vault Export
+
+```bash
+# Preview
+node scripts/memory/export-obsidian-vault.mjs --wing everclaw --dry-run
+
+# Export
+node scripts/memory/export-obsidian-vault.mjs --wing everclaw --clean
+```
+
+Output: `~/Documents/EverClaw-Vault/` — open directly in Obsidian.
+
+Vault structure:
+```
+EverClaw-Vault/
+├── index.md           # Global Map of Content
+├── wings/<wing>/      # Wing MOC + rooms
+│   └── rooms/<room>/  # Room MOC + drawer files
+├── concepts/          # Entity pages (KG, Phase 2)
+└── timeline/          # Dated memory pages
+```
+
+### Architecture
+
+```
+OpenClaw memory_search ──→ MEMORY.md + memory/*.md (embeddinggemma-300m-qat)
+                          ↕ complementary
+MemPalace bridge ────────→ ChromaDB + temporal KG (all-MiniLM-L6-v2)
+                          ↕
+     mempalace_bridge.py ← Python subprocess, JSON contract on stdout
+     mempalace-bridge.mjs ← Node.js wrapper, spawns Python
+```
+
+### Tests
+
+```bash
+npm run test:memory   # 28 tests: backend, factory, bridge, regression
+```
+
+### Privacy
+
+MemPalace stores data locally in `~/.mempalace/`. Exported vaults may contain PII — consider encrypting the folder or using Obsidian's encryption plugin.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/python/mempalace_bridge.py` | Python bridge (MemPalace SDK ↔ JSON) |
+| `scripts/memory/mempalace-bridge.mjs` | Node.js bridge wrapper |
+| `scripts/memory/mempalace-search-hook.mjs` | Unified search API |
+| `scripts/memory/migrate-to-mempalace.mjs` | One-time migration script |
+| `scripts/memory/export-obsidian-vault.mjs` | Obsidian vault exporter |
+| `scripts/lib/memory-backend.mjs` | Backend abstraction + factory |
+| `scripts/lib/file-backend.mjs` | FileBackend (legacy fallback) |
+| `scripts/lib/mempalace-backend.mjs` | MemPalaceBackend |
+| `templates/everclaw-config-memory.json` | Memory config template |
+| `tests/memory-backend.mjs` | Backend tests (19 tests) |
+| `tests/mempalace-bridge.mjs` | Bridge tests (9 tests) |
+
+---
+
 ## Changelog
+
+### 2026.4.8
+- **MemPalace Enhanced Memory** — ChromaDB vector search + temporal KG + Obsidian export
+- 10 new files, 28 new tests
+- setup.mjs Stage 6: MemPalace detection + bridge health check
+- diagnose.sh A12: MemPalace SDK + palace status check
 
 ### 2026.4.2
 - **Agent Download** — Say "download my agent" in chat to get a one-click encrypted backup with a temporary download link

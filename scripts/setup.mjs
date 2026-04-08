@@ -23,7 +23,7 @@
 import { readFileSync, writeFileSync, existsSync, createReadStream } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { platform } from 'os';
+import { platform, homedir } from 'os';
 import { execSync } from 'child_process';
 import { createInterface } from 'readline';
 import { resolveBins, getPlatformBins } from './lib/detect-bins.mjs';
@@ -857,6 +857,47 @@ if (applyMode) {
         console.log('     If build fails, you may need: Xcode CLT (macOS) or build-essential + cmake (Linux)');
       }
     }
+  }
+
+  // ─── Stage 6: MemPalace Enhanced Memory (Optional) ──────────
+
+  console.log('\n  ─── MemPalace Enhanced Memory (Optional) ────────────────');
+  try {
+    execSync('python3 -c "import mempalace"', { stdio: 'pipe', timeout: 10000 });
+    console.log('  ✅ MemPalace SDK detected (pip install mempalace)');
+
+    // Check if palace exists
+    const palacePath = join(homedir(), '.mempalace', 'palace');
+    if (existsSync(palacePath)) {
+      console.log(`  ✅ Palace exists at ${palacePath}`);
+    } else {
+      console.log('  ℹ️  No palace found yet — run migration to initialize:');
+      console.log('     node scripts/memory/migrate-to-mempalace.mjs --dry-run');
+    }
+
+    // Verify bridge is functional
+    try {
+      const bridgePath = join(dirname(fileURLToPath(import.meta.url)), 'python', 'mempalace_bridge.py');
+      if (existsSync(bridgePath)) {
+        const bridgeResult = execSync(`python3 "${bridgePath}" status`, {
+          encoding: 'utf-8',
+          timeout: 15000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        const status = JSON.parse(bridgeResult);
+        if (status.healthy) {
+          console.log(`  ✅ Bridge healthy — ${status.fact_count || 0} facts in palace`);
+        } else {
+          console.log('  ⚠️  Bridge returned unhealthy status — run mine to populate');
+        }
+      }
+    } catch (bridgeErr) {
+      console.log('  ⚠️  Bridge check failed (non-critical)');
+    }
+  } catch {
+    console.log('  ℹ️  MemPalace not installed (optional enhancement)');
+    console.log('     Install with: pip install mempalace');
+    console.log('     Docs: https://github.com/AiEnigma-Labs/MemPalace');
   }
 
 } else {

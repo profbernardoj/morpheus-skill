@@ -1,0 +1,18 @@
+{
+  "_comment": "EverClaw Memory Backend Configuration. Requires: pip install mempalace. Privacy: Vaults may contain PII — consider encryption.",
+  "_version": "1.0.1",
+  "memory": {
+    "backend": "mempalace",
+    "mempalace": {
+      "palacePath": "~/.mempalace/palace",
+      "kgPath": "~/.mempalace/knowledge_graph.sqlite3",
+      "wing": null,
+      "pythonPath": "python3",
+      "timeout": 300000
+    },
+    "file": {
+      "memoryDir": "~/.openclaw/workspace/memory"
+    },
+    "fallback": "file"
+  }
+}

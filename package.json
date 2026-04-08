@@ -1,6 +1,6 @@
 {
   "name": "everclaw",
-  "version": "2026.4.7.1918",
+  "version": "2026.4.8.0449",
   "type": "module",
   "description": "Open-source first AI inference via Morpheus decentralized network",
   "scripts": {
@@ -10,6 +10,7 @@
     "test:docker": "node --test tests/lib-docker.mjs",
     "test:keychain": "node --test tests/lib-keychain.mjs",
     "test:manifest": "node --test tests/lib-manifest.mjs",
+    "test:memory": "node --test tests/memory-backend.mjs tests/mempalace-bridge.mjs",
     "bootstrap": "node scripts/bootstrap-gateway.mjs"
   },
   "keywords": [

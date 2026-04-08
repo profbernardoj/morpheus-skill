@@ -235,6 +235,17 @@ The proxy handles all the blockchain complexity: opening sessions, renewing befo
 
 **Benefit:** Your agent handles MOR tokens and private keys safely. The same security patterns used by professional custody solutions, adapted for AI agents.
 
+### 🧠 MemPalace — Enhanced Memory (Optional)
+| Component | What It Does |
+|-----------|-------------|
+| **ChromaDB Vector Search** | Semantic search across all memory files using all-MiniLM-L6-v2 embeddings |
+| **Temporal Knowledge Graph** | Query entity relationships at specific points in time ("What did we know about X on date Y?") |
+| **Obsidian Vault Export** | Export palace as browsable vault with frontmatter, wikilinks, MOCs, and timeline pages |
+| **Dual Embedding Models** | Complements OpenClaw's built-in embeddinggemma-300m-qat — different models catch different semantic matches |
+| **Migration Tool** | Idempotent one-time import of existing memory/*.md files into MemPalace |
+
+**Benefit:** Your agent gets deeper memory recall across thousands of files. Two embedding models (300M + 22M params) searching independently means better coverage. The Obsidian export lets you browse and graph-visualize your agent's entire knowledge base. Requires `pip install mempalace` — EverClaw works without it.
+
 ---
 
 ## Available Models
@@ -316,6 +327,7 @@ When a session ends, your MOR comes back. Open a new session with the same token
 - **macOS or Linux** — macOS Keychain or libsecret for native key storage; encrypted file fallback works everywhere
 - **age, zstd, jq** — for backup/restore features (auto-installed by `install.sh`)
 - **node-llama-cpp** — for local memory search embeddings (auto-installed by `setup.mjs` and `install.sh`)
+- **mempalace** (optional) — `pip install mempalace` for enhanced ChromaDB + temporal KG memory. Not required — EverClaw works without it.
 
 That's it. No external accounts. No API keys. No subscriptions.
 

@@ -2,6 +2,38 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.8] - 2026-04-08 — MemPalace Enhanced Memory
+
+### Added
+- **MemPalace memory backend** — Optional upgrade layering ChromaDB vector search + temporal knowledge graph on top of OpenClaw's built-in `memory_search`. Dual embedding models (embeddinggemma-300m-qat 300M + all-MiniLM-L6-v2 22M) catch different semantic matches.
+- **Python bridge** (`scripts/python/mempalace_bridge.py`) — JSON contract between Node.js and MemPalace SDK v3.0.0 via spawn(). Supports search, mine, wake-up, status, init, as-of, and export commands. Full stdout suppression preserves JSON contract.
+- **Shared bridge utility** (`scripts/lib/bridge-call.mjs`) — Single source of truth for Python bridge communication. Configurable `rejectOnError` for strict vs graceful degradation modes.
+- **Memory backend abstraction** (`scripts/lib/memory-backend.mjs`) — Factory pattern with `MemPalaceBackend` and `FileBackend`. Async dynamic imports, graceful fallback.
+- **FileBackend** (`scripts/lib/file-backend.mjs`) — Grep-based search over memory/*.md files. Read-only fallback when MemPalace is not installed.
+- **MemPalaceBackend** (`scripts/lib/mempalace-backend.mjs`) — Full ChromaDB + temporal KG access via Python bridge.
+- **Migration script** (`scripts/memory/migrate-to-mempalace.mjs`) — One-time ingestion of existing memory files. Idempotent (content-hash IDs), supports dry-run, wing selection, category stats.
+- **Search hook** (`scripts/memory/mempalace-search-hook.mjs`) — Unified search API combining MemPalace results with OpenClaw built-in search. Graceful degradation when MemPalace unavailable.
+- **Obsidian vault export** (`scripts/memory/export-obsidian-vault.mjs`) — Exports palace as Obsidian-compatible vault with YAML frontmatter, wikilinks, MOCs, timeline pages. 3,245 drawers → 3,302 files in ~3s.
+- **CLI bridge** (`scripts/memory/mempalace-bridge.mjs`) — Full CLI for all memory operations with backend selection.
+- **Config template** (`templates/everclaw-config-memory.json`) — Memory backend configuration with MemPalace and FileBackend options.
+- **Setup Stage 6** — `setup.mjs` now detects MemPalace SDK, checks palace existence, and verifies bridge health.
+- **Diagnose A12** — `diagnose.sh` checks MemPalace installation and palace status.
+- **Test suite** — 28 automated tests across `tests/memory-backend.mjs` (19) and `tests/mempalace-bridge.mjs` (9). Covers FileBackend, MemPalaceBackend, factory, error handling, edge cases.
+- **SKILL.md Section 23** — Full documentation of MemPalace integration, architecture, CLI usage, and configuration.
+
+### Changed
+- **`package.json`** — Added `test:memory` script.
+
+### Security
+- All new files pass PII scan (0 findings). MemPalace vaults stored locally in `~/.mempalace/`. Export includes privacy warning.
+
+### Technical Notes
+- Requires: `pip install mempalace` (optional — EverClaw works without it)
+- First mine downloads 79MB embedding model (all-MiniLM-L6-v2)
+- Bridge timeout: 300s default (mining can be slow on first run)
+- Idempotent migration: ChromaDB content-hash IDs prevent duplicates on re-run
+- Wings provide data isolation (tested: 0 cross-contamination)
+
 ## [2026.4.7.1833] - 2026-04-07 — Ollama Input Modalities Fix
 
 ### Fixed

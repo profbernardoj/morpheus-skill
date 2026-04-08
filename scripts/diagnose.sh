@@ -328,6 +328,23 @@ print(count)
       pass "All model input modalities valid (text/image only)"
     fi
   fi
+
+  # A12: Is MemPalace installed for enhanced memory (optional)?
+  if command -v python3 &>/dev/null; then
+    if python3 -c "import mempalace" 2>/dev/null; then
+      pass "MemPalace SDK installed (enhanced memory available)"
+      local palace_path="$HOME/.mempalace/palace"
+      if [[ -d "$palace_path" ]]; then
+        pass "MemPalace palace exists at $palace_path"
+      else
+        warn "MemPalace palace not found — run migration to initialize"
+        fix "node scripts/memory/migrate-to-mempalace.mjs --dry-run"
+      fi
+    else
+      info "MemPalace not installed (optional enhancement for memory search)"
+      fix "Install: pip install mempalace"
+    fi
+  fi
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
