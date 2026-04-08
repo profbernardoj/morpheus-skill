@@ -13,7 +13,7 @@ Before doing anything else:
 
 1. Read `SOUL.md` — this is who you are
 2. Read `USER.md` — this is who you're helping
-3. **Run `memory_search`** for recent context (today's work, active projects, recent decisions)
+3. **Run `memory_search`** for recent context (e.g. `"today's work active projects recent decisions"`)
 4. Read `memory/YYYY-MM-DD.md` (today + yesterday) for raw session logs
 5. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 
@@ -39,6 +39,13 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - When the user asks about something from a past session
 - When you need context on a project, person, or decision
 - Before updating MEMORY.md (find what's already there)
+
+**Example queries:**
+- `"today's work active projects recent decisions"` — good session opener
+- `"decisions about auth system"` — specific topic recall
+- `"what happened this week"` — broad review for heartbeat maintenance
+
+**Tip:** Specific + temporal beats vague — both for result quality and for dreaming signal. `"wallet encryption decision March"` is better than `"wallet stuff"` because it generates a sharper recall entry.
 
 **Why it matters beyond just finding things:**
 Every `memory_search` call feeds the **recall store** (`memory/.dreams/short-term-recall.json`). OpenClaw's **dreaming system** uses recall data to identify which memories matter most — high recall count + diverse queries + good scores = automatic promotion to MEMORY.md during nightly sweeps. **If you don't search, dreaming has nothing to work with.**
@@ -211,7 +218,7 @@ Periodically (every few days), use a heartbeat to:
 1. Run `memory_search` for recent themes ("what happened this week", "active projects", "recent decisions")
 2. Read through recent `memory/YYYY-MM-DD.md` files
 3. Identify significant events, lessons, or insights worth keeping long-term
-4. Check `openclaw memory promote --limit 10` for dreaming candidates (if dreaming is enabled)
+4. If dreaming is enabled: run `openclaw memory promote --limit 10` to review auto-promotion candidates
 5. Update `MEMORY.md` with distilled learnings
 6. Remove outdated info from MEMORY.md that's no longer relevant
 
