@@ -2,6 +2,18 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.9.1353] - 2026-04-09 — OpenClaw v2026.4.9 Pin
+
+### Changed
+- **OpenClaw pin** `v2026.4.8` → `v2026.4.9`
+  - Dreaming REM backfill lane + `rem-harness --path` for historical daily notes (MemPalace users can now replay old diary entries into Dreams without a second memory stack)
+  - Agent idle timeout now correctly inherits `agents.defaults.timeoutSeconds` (we ship 300s) — eliminates false idle-timeout kills for Morpheus P2P users during slow inference; watchdog disabled for cron runs
+  - npm packaging fixes for channel plugin deps (validates our Issue #17 Docker workaround)
+  - Security & stability: Browser SSRF recheck, dotenv runtime-control blocking, node exec event sanitization, NO_REPLY token stripping, and auto-fallback model override cleared on `/reset`
+
+**Notes**
+Pure version pin bump. No breaking changes, no template modifications, no code changes required in EverClaw. Dry run confirmed clean with zero conflicts.
+
 ## [2026.4.9] - 2026-04-09 — Docker Channel Plugin Fix
 
 ### Fixed
