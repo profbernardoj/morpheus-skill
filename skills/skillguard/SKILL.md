@@ -8,6 +8,30 @@ metadata: {"openclaw": {"requires": {"bins": ["node"]}}}
 
 When asked to check, audit, or scan a skill for security, use SkillGuard.
 
+## Trust Model (v0.3)
+
+SkillGuard distinguishes between **internal** (trusted) and **external** (untrusted) skills:
+
+- **Internal skills** — Skills under `~/.openclaw/workspace/skills/` or `~/.openclaw/workspace/claw-repos/`. These are skills we authored ourselves.
+- **External skills** — Everything else (ClawHub downloads, third-party packages, etc.)
+
+### Why it matters
+
+Internal skills legitimately use patterns like `exec()`, `process.env.API_KEY`, `fetch()`, and `writeFile()` — that's infrastructure code doing its job. Flagging those as "suspicious" creates noise that buries real issues.
+
+For **internal skills**, SkillGuard uses vulnerability-focused scanning:
+- ✅ Still flags: hardcoded secrets, reverse shells, pickle deserialization, unsafe YAML, actual code obfuscation, prompt injection in operational code
+- ❌ Suppresses: "uses exec", "reads env vars", "makes HTTP requests", "writes files", "references private keys" (in wallet tools), "uses sudo" (in setup scripts), behavioral compound signatures
+
+For **external skills**, full paranoid threat-model scanning applies — every pattern is treated as potentially malicious.
+
+### Overriding trust
+
+Use `--untrusted` to force external mode on an internal skill:
+```bash
+node src/cli.js scan /path/to/skill --untrusted
+```
+
 ## Commands
 
 ### Scan a local skill directory

@@ -30,6 +30,14 @@ export function formatTextReport(report) {
   lines.push(`  Path:     ${report.path}`);
   lines.push(`  Scanned:  ${report.scannedAt}`);
   lines.push(`  Files:    ${report.files.length}`);
+  if (report.trust) {
+    const trustIcon = report.trust.trusted ? '🏠' : '🌐';
+    const trustLabel = report.trust.trusted ? 'INTERNAL (trusted)' : 'EXTERNAL';
+    lines.push(`  Trust:    ${trustIcon} ${trustLabel}`);
+    if (report.trust.trusted && report.trustSuppressedCount > 0) {
+      lines.push(`  Note:     ${report.trustSuppressedCount} expected-behavior findings suppressed (internal skill)`);
+    }
+  }
   lines.push(`  Score:    ${report.score}/100 ${RISK_ICONS[report.risk]} ${report.risk} RISK`);
   lines.push('');
 
@@ -112,7 +120,11 @@ export function formatCompactReport(report, skillName = null) {
   const lines = [];
 
   lines.push(`🛡️ **SkillGuard Audit: ${name}**`);
-  lines.push(`Score: **${report.score}/100** ${RISK_ICONS[report.risk]}`);
+  if (report.trust?.trusted) {
+    lines.push(`🏠 Internal skill (trusted) | Score: **${report.score}/100** ${RISK_ICONS[report.risk]}`);
+  } else {
+    lines.push(`Score: **${report.score}/100** ${RISK_ICONS[report.risk]}`);
+  }
   lines.push('');
 
   if (report.findings.length === 0) {

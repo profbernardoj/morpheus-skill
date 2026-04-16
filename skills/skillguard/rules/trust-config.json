@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "description": "Trust configuration for SkillGuard. Internal skills get vulnerability-focused scanning (real bugs, hardcoded secrets, reverse shells). External skills get full threat-model scanning (intent analysis, behavioral signatures).",
+  "trustedPaths": [
+    "~/.openclaw/workspace/skills/",
+    "~/.openclaw/workspace/claw-repos/"
+  ],
+  "trustedGitRemotes": [
+    "github.com/profbernardoj/",
+    "github.com/EverClaw/",
+    "github.com/SmartAgentProtocol/"
+  ],
+  "alwaysFlagCategories": [
+    "hardcoded-secret",
+    "reverse-shell",
+    "obfuscation-with-exec",
+    "pickle-deserialize",
+    "unsafe-yaml"
+  ],
+  "_notes": {
+    "prompt-injection": "Deliberately omitted from alwaysFlagCategories — context-dependent. A security doc describing injection patterns isn't the same as actual injection. The code's applyTrustSuppression() handles PI with nuanced checks (SKILL.md, references/, tests, detection code, etc.)."
+  },
+  "suppressWhenTrusted": [
+    "code-execution",
+    "credential-theft",
+    "data-exfiltration",
+    "filesystem",
+    "behavioral",
+    "suspicious-file"
+  ],
+  "notes": "Trusted skills still get scanned — we want to catch actual vulnerabilities in our own code. What we suppress is 'this code uses exec/fetch/env' which is expected for infrastructure tools we authored."
+}

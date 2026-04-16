@@ -52,6 +52,7 @@ export class Gate {
     };
     this.ledger = options.ledger || new Ledger();
     this.rules = null;
+    this.trustConfig = options.trustConfig || null;
   }
 
   /**
@@ -76,7 +77,7 @@ export class Gate {
    */
   async checkInstall(skillPath, options = {}) {
     const rules = await this._loadRules();
-    const scanner = new SkillScanner(rules);
+    const scanner = new SkillScanner(rules, { trustConfig: this.trustConfig || null });
     const flowAnalyzer = new FlowAnalyzer();
 
     // Get skill hash

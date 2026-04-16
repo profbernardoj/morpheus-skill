@@ -21,7 +21,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export async function quickScan(skillPath, options = {}) {
   const rulesPath = join(__dirname, '..', 'rules', 'dangerous-patterns.json');
   const rulesData = JSON.parse(await readFile(rulesPath, 'utf-8'));
-  const scanner = new SkillScanner(rulesData.rules);
+  
+  // Load trust config
+  let trustConfig = null;
+  try {
+    const trustPath = join(__dirname, '..', 'rules', 'trust-config.json');
+    trustConfig = JSON.parse(await readFile(trustPath, 'utf-8'));
+  } catch { /* no trust config */ }
+  
+  const scanner = new SkillScanner(rulesData.rules, { trustConfig });
   const report = await scanner.scanDirectory(skillPath);
 
   if (options.format === 'compact') {

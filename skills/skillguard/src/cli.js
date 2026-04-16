@@ -23,6 +23,15 @@ async function loadRules() {
   return data.rules;
 }
 
+async function loadTrustConfig() {
+  try {
+    const trustPath = join(__dirname, '..', 'rules', 'trust-config.json');
+    return JSON.parse(await readFile(trustPath, 'utf-8'));
+  } catch {
+    return null; // No trust config = full paranoid mode
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -52,12 +61,18 @@ Options:
   };
 
   const rules = await loadRules();
-  const scanner = new SkillScanner(rules);
+  const trustConfig = await loadTrustConfig();
+  const scanner = new SkillScanner(rules, { trustConfig });
 
   switch (command) {
     case 'scan': {
       const targetPath = resolve(args[1] || '.');
-      const report = await scanner.scanDirectory(targetPath);
+      // --untrusted flag forces external mode even for internal paths
+      const forceUntrusted = args.includes('--untrusted');
+      const scannerWithTrust = forceUntrusted
+        ? new SkillScanner(rules, { trusted: false })
+        : scanner;
+      const report = await scannerWithTrust.scanDirectory(targetPath);
 
       if (flags.json) {
         console.log(JSON.stringify(report, null, 2));

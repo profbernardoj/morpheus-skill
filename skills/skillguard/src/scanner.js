@@ -1,5 +1,5 @@
 /**
- * SkillGuard Scanner v0.2 — Hardened Core Engine
+ * SkillGuard Scanner v0.3 — Trust-Aware Engine
  * 
  * Three-layer analysis:
  * 1. Pattern matching (fast, catches obvious threats)
@@ -7,10 +7,19 @@
  * 3. Prompt injection analysis (catches social engineering)
  * 
  * Plus: context-aware scoring that reduces false positives
+ * 
+ * v0.3: Trust-aware scanning. Internal skills (authored by us) get
+ * vulnerability-focused analysis — real bugs, hardcoded secrets,
+ * reverse shells. External skills get full threat-model scanning
+ * including intent analysis and behavioral signatures.
+ * 
+ * The distinction: "this code uses exec()" is a feature in our own
+ * infrastructure tools, but a red flag in an untrusted download.
  */
 
 import { readFile, readdir, stat } from 'fs/promises';
-import { join, extname, basename } from 'path';
+import { join, extname, basename, resolve } from 'path';
+import { homedir } from 'os';
 import { ASTAnalyzer } from './ast-analyzer.js';
 import { PromptAnalyzer } from './prompt-analyzer.js';
 
@@ -40,8 +49,113 @@ const KNOWN_GOOD_APIS = [
   'api.weather.gov', 'googleapis.com', 'api.telegram.org',
 ];
 
+// === TRUST MODEL ===
+// These categories represent REAL vulnerabilities we always flag,
+// even in our own code. Everything else (exec, fetch, env access)
+// is expected infrastructure behavior for internal tools.
+const ALWAYS_FLAG_RULE_IDS = new Set([
+  // Reverse shells / backdoors — always flag, internal or not
+  'SHELL_CRITICAL',       // netcat listeners, /dev/tcp, mkfifo+nc
+  // Deserialization attacks — always flag (real vulnerability)
+  'PYTHON_PICKLE',        // pickle.loads
+  'PYTHON_MARSHALL',      // marshal.loads
+  'PYTHON_YAML',          // unsafe yaml.load
+  // Obfuscation — hiding intent is always suspicious, even internally
+  'STRING_CONSTRUCTION',  // building strings to hide code
+  'ENCODED_STRING',       // encoded payloads
+  'FUNCTION_ALIAS',       // aliasing dangerous functions
+  // NOTE: PROMPT_INJECTION, PROMPT_OVERRIDE, PROMPT_JAILBREAK are NOT here.
+  // Prompt injection detection is context-dependent — a security doc describing
+  // injection patterns isn't the same as actual injection. The prompt-injection
+  // category handler in applyTrustSuppression decides what to keep vs suppress.
+]);
+
+// Categories that are fine in internal code but suspicious externally
+const INTERNAL_EXPECTED_CATEGORIES = new Set([
+  'code-execution',
+  'credential-theft',
+  'data-exfiltration',
+  'filesystem',
+  'behavioral',
+  'suspicious-file',
+  'financial',          // Wallet/key management tools naturally reference seed phrases, private keys
+  'privilege-escalation', // Setup scripts legitimately use sudo
+  'persistence',        // Tools that set up systemd/launchd services are expected
+  'evasion',            // Temp files, PID-based names, etc. are standard patterns
+  'reconnaissance',     // Test files and path discovery are standard
+  'prototype-pollution', // Compiled TS __spreadArray helpers trigger false positives
+]);
+
+// Default trusted paths (expanded ~ at runtime)
+const DEFAULT_TRUSTED_PATHS = [
+  '~/.openclaw/workspace/skills/',
+  '~/.openclaw/workspace/claw-repos/',
+];
+
+/**
+ * Check if a file path is documentation, test, or non-operational code.
+ * Findings in these files are almost always false positives for internal skills.
+ * @param {string} file — Relative file path
+ * @returns {boolean}
+ */
+function isDocumentationOrTest(file) {
+  return /references\//.test(file) ||
+    /examples?\//.test(file) ||
+    /test|spec/i.test(file) ||
+    /blog\//.test(file) ||
+    /docs?\//.test(file) ||
+    /pattern/i.test(file) ||
+    /\.ya?ml$/i.test(file) ||
+    /config/i.test(file) ||
+    /^(README|ARCHITECTURE|CHANGELOG|RELEASE|CONTRIBUTING|DESIGN|SECURITY)/i.test(file) ||
+    // Only detection/guard code that lives under known guard directories — tighten
+    // to match files like detect.py, guard.mjs, scanner.js, engine.ts
+    // Also matches files under directories named with guard/detect patterns (incl. underscore variants)
+    /(?:^|\/)(detect|guard|engine|normalizer|decoder|scanner|analyzer)[^/]*\.(js|ts|py)$/i.test(file) ||
+    /\/(detect|guard|engine|normalizer|decoder|scanner|analyzer)[^/]*\//i.test(file) ||
+    /[_.](detect|guard|engine|normalizer|decoder|scanner|analyzer)/i.test(file) ||
+    /\b(dist|build)\//.test(file);
+}
+
+/**
+ * Resolve ~ in paths and normalize
+ */
+function expandPath(p) {
+  if (p.startsWith('~/')) {
+    return resolve(homedir(), p.slice(2));
+  }
+  return resolve(p);
+}
+
+/**
+ * Determine if a skill path is "trusted" (internal/authored by us)
+ * @param {string} skillPath — Absolute path to skill
+ * @param {Object} [trustConfig] — Optional trust config override
+ * @returns {{ trusted: boolean, reason: string }}
+ */
+function resolveTrust(skillPath, trustConfig) {
+  const absPath = resolve(skillPath);
+
+  // Check explicit trusted paths
+  const trustedPaths = trustConfig?.trustedPaths || DEFAULT_TRUSTED_PATHS;
+  for (const tp of trustedPaths) {
+    const expanded = expandPath(tp);
+    if (absPath.startsWith(expanded)) {
+      return { trusted: true, reason: `Path under trusted directory: ${tp}` };
+    }
+  }
+
+  return { trusted: false, reason: 'Path not in trusted directories' };
+}
+
 export class SkillScanner {
-  constructor(rules) {
+  /**
+   * @param {Object[]} rules — Pattern rules
+   * @param {Object} [options]
+   * @param {boolean} [options.trusted] — Force trust mode (overrides path detection)
+   * @param {Object} [options.trustConfig] — Trust config from rules/trust-config.json
+   */
+  constructor(rules, options = {}) {
     this.rules = rules;
     this.compiledRules = rules.map(rule => ({
       ...rule,
@@ -49,16 +163,29 @@ export class SkillScanner {
     }));
     this.astAnalyzer = new ASTAnalyzer();
     this.promptAnalyzer = new PromptAnalyzer();
+    this._forceTrust = options.trusted;
+    this._trustConfig = options.trustConfig || null;
   }
 
   /**
    * Full skill directory scan — three-layer analysis
    */
   async scanDirectory(skillPath) {
+    // Resolve trust status
+    let trustStatus;
+    if (this._forceTrust === true) {
+      trustStatus = { trusted: true, reason: 'Forced via options.trusted=true' };
+    } else if (this._forceTrust === false) {
+      trustStatus = { trusted: false, reason: 'Forced via options.trusted=false' };
+    } else {
+      trustStatus = resolveTrust(skillPath, this._trustConfig);
+    }
+
     const report = {
       path: skillPath,
       scannedAt: new Date().toISOString(),
-      version: '0.2.0',
+      version: '0.3.0',
+      trust: trustStatus,
       files: [],
       findings: [],
       score: 100,
@@ -151,6 +278,11 @@ export class SkillScanner {
 
     // Context-aware scoring adjustments (may suppress behavioral findings too)
     await this.applyContextScoring(report);
+
+    // Trust-aware suppression: internal skills only flag real vulnerabilities
+    if (report.trust.trusted) {
+      this.applyTrustSuppression(report);
+    }
 
     // Aggregate repeated findings — same rule in same file counts once
     this.aggregateFindings(report);
@@ -497,6 +629,150 @@ export class SkillScanner {
         sig.note = 'All underlying access is declared/known-good';
       }
     }
+  }
+
+  /**
+   * Trust-aware suppression for internal skills.
+   * 
+   * Philosophy: Internal skills are code WE wrote. We don't need to be told
+   * "this code uses exec()" or "this code reads env vars" — of course it does,
+   * we wrote it that way on purpose.
+   * 
+   * What we DO still want:
+   * - Hardcoded secrets (real vulnerability — we might have left one in)
+   * - Reverse shells (would indicate compromise)
+   * - Pickle/marshal deserialization (real vulnerability)
+   * - Unsafe YAML loading (real vulnerability)
+   * - Obfuscation patterns (our code shouldn't be obfuscated)
+   * - Prompt injection in text files (could indicate tampering)
+   * 
+   * What we suppress:
+   * - "Uses exec/spawn" — yes, it's a CLI tool
+   * - "Reads API keys from env" — yes, it needs credentials
+   * - "Makes HTTP requests" — yes, it calls APIs
+   * - "Writes files" — yes, it manages config
+   * - Behavioral compound signatures — "credential read + network = exfil" is
+   *   nonsensical for a tool that needs an API key to call an API
+   */
+  applyTrustSuppression(report) {
+    let suppressedCount = 0;
+
+    for (const finding of report.findings) {
+      // Always keep real vulnerability findings regardless of trust
+      if (ALWAYS_FLAG_RULE_IDS.has(finding.ruleId)) {
+        continue;
+      }
+
+      // Always keep prompt injection findings (could indicate tampering)
+      // BUT for internal skills, heavily suppress PI findings that are clearly
+      // documentation/examples/tests — a security tool describing injection
+      // patterns isn't the same as actual injection.
+      if (finding.category === 'prompt-injection') {
+        if (report.trust?.trusted) {
+          const file = finding.file || '';
+          const ctx = finding.context || '';
+          const isDocOrTest = isDocumentationOrTest(file);
+          // SKILL.md is never executable code; it's always instructions/docs
+          const isSkillMd = /SKILL\.md$/i.test(file);
+          // A security document is any file that is documentation, test, or SKILL.md
+          const isSecurityDocument = isDocOrTest || isSkillMd;
+
+          // Content in a markdown table with "Block" = security rules, not actual injection
+          const isInTableWithAction = /\|.*\|.*\|/i.test(ctx) &&
+            /block|warn|deny|reject/i.test(ctx);
+          // Table with security category descriptions (role_override, jailbreak, etc.)
+          const isInSecurityTable = /\|.*\|\s*(?:role|override|jailbreak|exfil|privilege|social|fake|system|injection)\b/i.test(ctx);
+          // Security sections, rules tables, bullet lists, headings in SKILL.md
+          const isSkillSecuritySection = isSkillMd &&
+            (/CRITICAL|block|defend|prevent|protect|guard|filter|attack|payload|evasion|trick|disguised|homoglyph|bypass|exfil/i.test(ctx) ||
+             /^\s*-\s/.test(ctx) ||  // bullet list items
+             /^\s*#/.test(ctx));     // headings
+          // isDescribingThreat is ONLY allowed to suppress when we are inside documentation.
+          // This prevents a real prompt-injection payload that happens to contain the word
+          // "jailbreak" or "payload" from being auto-suppressed in executable code.
+          const isDescribingThreatInDoc = isSecurityDocument &&
+            (/injection|bypass|jailbreak|attack|payload|threat/i.test(ctx) ||
+             /ThreatLevel\./i.test(ctx) ||
+             /escalation|privilege/i.test(ctx) ||
+             /detect|analyze|guard|scan|check/i.test(ctx));
+
+          if (isSecurityDocument &&
+              (isDocOrTest || isSkillMd || isInTableWithAction || isInSecurityTable || isSkillSecuritySection || isDescribingThreatInDoc)) {
+            finding.weight = 0;
+            finding.severity = 'info';
+            finding.contextNote = (finding.contextNote || '') +
+              ' [TRUSTED: prompt injection pattern in security documentation/reference/tests]';
+            finding.suppressed = true;
+            suppressedCount++;
+          }
+          // NOTE: For executable code inside trusted skills we still emit the PI finding.
+          // A compromised internal skill that contains a real injection vector must not be silenced.
+        }
+        continue;
+      }
+
+      // Obfuscation: downgrade but don't fully suppress for internal skills.
+      // Hex/base64 patterns in crypto/wallet tools are expected, but
+      // actual code obfuscation (hiding intent) would still be concerning.
+      if (finding.category === 'obfuscation') {
+        if (report.trust?.trusted) {
+          const isDocOrTest = isDocumentationOrTest(finding.file);
+          // Crypto operations — randomBytes().toString('base64'/'hex') is standard, not obfuscation
+          const isCryptoOperation = /randomBytes|crypto\.|createHash|createCipher|sign\(|verify\(/i.test(finding.context) ||
+            /toString\s*\(\s*['"](?:base64|hex)['"]\s*\)/i.test(finding.context);
+          if (isDocOrTest || isCryptoOperation) {
+            finding.weight = 0;
+            finding.severity = 'info';
+            finding.contextNote = (finding.contextNote || '') +
+              ' [TRUSTED: pattern in documentation/reference/detection-code]';
+            finding.suppressed = true;
+            suppressedCount++;
+            continue;
+          }
+          // Downgrade only for trusted code that wasn't fully suppressed
+          if (finding.severity === 'critical') {
+            finding.severity = 'medium';
+            finding.weight = Math.max(2, Math.floor(finding.weight * 0.25));
+            finding.contextNote = (finding.contextNote || '') +
+              ' [TRUSTED: downgraded — hex/base64 patterns expected in internal tools]';
+            continue;
+          }
+        }
+        // External skills: obfuscation stays at original severity
+      }
+
+      // Suppress expected-behavior findings for internal code
+      if (INTERNAL_EXPECTED_CATEGORIES.has(finding.category)) {
+        finding.weight = 0;
+        finding.severity = 'info';
+        finding.contextNote = (finding.contextNote || '') +
+          ' [TRUSTED: expected behavior in internal skill]';
+        finding.suppressed = true;
+        suppressedCount++;
+      }
+    }
+
+    // Suppress ALL behavioral signatures for trusted skills.
+    // "Credential read + network send = exfiltration" is meaningless when
+    // the skill legitimately needs API keys to call APIs.
+    for (const sig of report.behavioralSignatures) {
+      sig.suppressed = true;
+      sig.note = 'Suppressed — internal/trusted skill (expected infrastructure behavior)';
+    }
+
+    // Also zero out behavioral compound findings
+    for (const finding of report.findings) {
+      if (finding.category === 'behavioral') {
+        finding.weight = 0;
+        finding.severity = 'info';
+        finding.contextNote = (finding.contextNote || '') +
+          ' [TRUSTED: behavioral signatures not applicable to internal skills]';
+        finding.suppressed = true;
+        suppressedCount++;
+      }
+    }
+
+    report.trustSuppressedCount = suppressedCount;
   }
 
   /**

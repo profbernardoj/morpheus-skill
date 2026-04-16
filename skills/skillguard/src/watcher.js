@@ -56,6 +56,7 @@ export class Watcher {
     this.statePath = options.statePath || DEFAULT_STATE_PATH;
     this.ledger = options.ledger || new Ledger();
     this.rules = options.rules || null;
+    this.trustConfig = options.trustConfig || null;
   }
 
   /**
@@ -70,6 +71,17 @@ export class Watcher {
     const rulesPath = join(__dirname, '..', 'rules', 'dangerous-patterns.json');
     const data = JSON.parse(await readFile(rulesPath, 'utf-8'));
     this.rules = data.rules;
+
+    // Also load trust config if not provided
+    if (!this.trustConfig) {
+      try {
+        const trustPath = join(__dirname, '..', 'rules', 'trust-config.json');
+        this.trustConfig = JSON.parse(await readFile(trustPath, 'utf-8'));
+      } catch {
+        // No trust config = full paranoid mode
+      }
+    }
+
     return this.rules;
   }
 
@@ -185,7 +197,7 @@ export class Watcher {
    */
   async _checkSkill(skill, state, rules) {
     const alerts = [];
-    const scanner = new SkillScanner(rules);
+    const scanner = new SkillScanner(rules, { trustConfig: this.trustConfig });
 
     // Hash check first (fast)
     const { hash: currentHash, fileCount, totalSize } = await hashSkill(skill.path);
@@ -193,37 +205,59 @@ export class Watcher {
 
     // New skill — not seen before
     if (!prevState) {
+      // Scan it first (need trust status)
+      const report = await scanner.scanDirectory(skill.path);
+      const isTrusted = report.trust?.trusted || false;
+      
       // Check if it's in the ledger
       const { approved } = await this.ledger.isApproved(skill.name);
       
-      if (!approved) {
+      if (!approved && !isTrusted) {
+        // External skill not in ledger = suspicious
         alerts.push({
           type: 'unapproved',
           severity: 'high',
           skill: skill.name,
-          message: `Skill "${skill.name}" is installed but NOT in the approved ledger.`,
+          message: `External skill "${skill.name}" is installed but NOT in the approved ledger.`,
           details: { hash: currentHash, fileCount },
         });
+      } else if (!approved && isTrusted) {
+        // Internal skill not in ledger = minor note, not a security concern
+        // (we wrote it ourselves — approval is administrative, not security)
       }
-
-      // Scan it
-      const report = await scanner.scanDirectory(skill.path);
       
       state.skills[skill.name] = {
         hash: currentHash,
         score: report.score,
         findingsCount: report.findings.length,
         lastScannedAt: new Date().toISOString(),
+        trusted: isTrusted,
       };
 
-      if (report.score < 50) {
+      // Only alert on low scores for EXTERNAL skills
+      // Internal/trusted skills are expected to use exec/env/fetch patterns
+      if (report.score < 50 && !isTrusted) {
         alerts.push({
           type: 'new_findings',
           severity: 'critical',
           skill: skill.name,
-          message: `New skill "${skill.name}" has dangerous score: ${report.score}/100 (${report.findings.length} findings).`,
+          message: `New external skill "${skill.name}" has dangerous score: ${report.score}/100 (${report.findings.length} findings).`,
           details: { score: report.score, risk: report.risk, findings: report.findings.length },
         });
+      }
+
+      // For internal skills, only alert if there are REAL vulnerability findings (not suppressed)
+      if (isTrusted && report.score < 50) {
+        const realVulns = report.findings.filter(f => f.severity !== 'info' && !f.suppressed);
+        if (realVulns.length > 0) {
+          alerts.push({
+            type: 'new_findings',
+            severity: 'high',
+            skill: skill.name,
+            message: `Internal skill "${skill.name}" has ${realVulns.length} real vulnerability finding(s) (score: ${report.score}/100).`,
+            details: { score: report.score, risk: report.risk, realVulns: realVulns.map(v => v.title) },
+          });
+        }
       }
 
       return alerts;
