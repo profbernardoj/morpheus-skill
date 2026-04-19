@@ -177,7 +177,7 @@ RUN FDIR="/home/node/.openclaw/workspace/skills/everclaw/templates/flavors/${FLA
 
 # ─── Environment ──────────────────────────────────────────────────────────────
 
-ARG EVERCLAW_VERSION=2026.4.19.0409
+ARG EVERCLAW_VERSION=2026.4.19.0439
 ENV EVERCLAW_VERSION=${EVERCLAW_VERSION}
 ENV NODE_ENV=production
 ENV EVERCLAW_PROXY_PORT=8083

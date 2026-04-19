@@ -2,7 +2,7 @@
 
 All notable changes to EverClaw are documented here.
 
-## [UNRELEASED] — Buddy Bots Gap 8: Inference Quotas
+## [2026.4.19.0439] - 2026-04-19
 
 ### Added — Per-Agent Inference Quota Management
 
