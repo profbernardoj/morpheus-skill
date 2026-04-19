@@ -2749,6 +2749,69 @@ MemPalace stores data locally in `~/.mempalace/`. Exported vaults may contain PI
 
 ---
 
+## 24. Buddy Bots — Multi-Agent Family Network (v2026.4.19)
+
+Deploy a network of AI agents that coordinate on behalf of their humans over secure XMTP V6 messaging. Each family member, friend, or colleague gets their own buddy bot that can schedule, recommend, plan, and remind — without exposing raw personal data.
+
+### Components
+
+| Script | Purpose |
+|--------|---------|
+| `buddy-provision.mjs` | Provision a new buddy bot identity (XMTP keys, wallet, Soul/User templates) |
+| `buddy-registry.mjs` | Local registry of known buddy bots and their capabilities |
+| `buddy-host.mjs` | Auto-provision buddy bots when new group chats are created |
+| `buddy-coordinate.mjs` | Bot-to-bot coordination payloads (scheduling, recommendations, group planning) |
+
+### Coordination Types
+
+```
+schedule-request / schedule-response    — "When is your human free Saturday?"
+recommendation-request / response       — "What restaurant does your human like?"
+group-plan-propose / vote / finalize    — Multi-bot group activity planning
+reminder-relay / reminder-ack           — Cross-bot reminder delivery
+preference-share                        — Share relevant preferences (trust-bounded)
+```
+
+### Trust Boundaries
+
+Coordination respects the existing trust profile system from `agent-chat`:
+
+| Profile | Allowed Types |
+|---------|---------------|
+| `public` | Group plan propose/vote/finalize only |
+| `business` | Above + scheduling, reminders |
+| `personal` | Above + recommendations, preferences |
+| `full` | All types |
+
+Sensitive types (`recommendation-response`, `preference-share`) are automatically marked `sensitivity: private` in V6 DATA messages.
+
+### Quick Start
+
+```bash
+# Create a coordination message
+node scripts/buddy-coordinate.mjs --create schedule-request --payload '{"date":"2026-04-20","note":"Saturday lunch?"}'
+
+# List pending coordination requests
+node scripts/buddy-coordinate.mjs --pending
+
+# Expire timed-out requests
+node scripts/buddy-coordinate.mjs --expire
+
+# Check coordination status
+node scripts/buddy-coordinate.mjs --status
+```
+
+### Security
+
+- Trust boundary enforcement at both parse and handler layers
+- Payload size limits on creation (32KB) and ingestion (48KB)
+- Atomic file writes with `0o700` permissions for request tracking
+- No npm dependencies (zero-dep validation)
+- Case-insensitive peer address matching
+- Whitespace-only string rejection for all ID fields
+
+---
+
 ## Changelog
 
 ### 2026.4.17.0050
