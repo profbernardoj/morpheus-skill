@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# ecosystem-sync.sh — Automated Morpheus Skill ecosystem sync
+# ecosystem-sync.sh — Monorepo-aware ecosystem sync
 #
-# Syncs the main branch to all 33 remotes (origin + everclaw + everclaw-org + 30 flavor repos).
-# Verifies all remotes match origin HEAD after push.
-# Sends a Signal summary via OpenClaw message tool (optional).
+# NEW BEHAVIOR (post-monorepo restructure):
+#   - origin + everclaw-org: Push the FULL monorepo
+#   - Flavor remotes: Compose core + flavor → push composed result
 #
 # Usage:
-#   ./ecosystem-sync.sh              # Push to all remotes
-#   ./ecosystem-sync.sh --dry-run    # Show what would be pushed, don't push
-#   ./ecosystem-sync.sh --verify     # Only verify sync status, no push
-#   ./ecosystem-sync.sh --force      # Force push (use after history rewrite)
+#   ./scripts/ecosystem-sync.sh              # Compose and push all flavors
+#   ./scripts/ecosystem-sync.sh --dry-run    # Show what would happen, don't push
+#   ./scripts/ecosystem-sync.sh --verify     # Only verify sync status, no push
+#   ./scripts/ecosystem-sync.sh --force      # Force push (use after history rewrite)
+#   ./scripts/ecosystem-sync.sh --flavor X   # Only sync specific flavor remote
 #
 # Exit codes:
 #   0 — All remotes in sync
@@ -18,225 +19,224 @@
 
 set -euo pipefail
 
-# === Concurrent Execution Lock (prevents overlapping pushes) ===
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+COMPOSE_SCRIPT="$SCRIPT_DIR/flavor-compose.sh"
+WORK_DIR="/tmp/everclaw-ecosystem-compose"
+
+# === Concurrent Execution Lock ===
 LOCK_DIR="/tmp/morpheus-skill-ecosystem-sync.lock"
 if mkdir "$LOCK_DIR" 2>/dev/null; then
-  trap 'rm -rf "$LOCK_DIR"' EXIT
+  trap 'rm -rf "$LOCK_DIR" "$WORK_DIR"' EXIT
 else
-  # Check if stale (older than 10 minutes)
   lock_age=0
-  if [[ -f "$LOCK_DIR/pid" ]]; then
+  if [ -f "$LOCK_DIR/pid" ]; then
     lock_ts=$(stat -f %m "$LOCK_DIR/pid" 2>/dev/null || stat -c %Y "$LOCK_DIR/pid" 2>/dev/null || echo 0)
     lock_age=$(( $(date +%s) - lock_ts ))
   fi
-  if (( lock_age > 600 )); then
-    echo "⚠️  Stale lock detected (${lock_age}s old) — removing and continuing"
+  if [ "$lock_age" -gt 600 ]; then
+    echo "⚠️  Stale lock detected (${lock_age}s old), removing..."
     rm -rf "$LOCK_DIR"
-    mkdir "$LOCK_DIR" 2>/dev/null
-    trap 'rm -rf "$LOCK_DIR"' EXIT
+    mkdir "$LOCK_DIR"
+    trap 'rm -rf "$LOCK_DIR" "$WORK_DIR"' EXIT
   else
-    echo "❌ Another ecosystem-sync is already running. Exiting." >&2
-    exit 1
+    echo "❌ Another ecosystem-sync is running (lock age: ${lock_age}s). Exiting."
+    exit 2
   fi
 fi
 echo $$ > "$LOCK_DIR/pid"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BRANCH="main"
+# === Parse args ===
 DRY_RUN=false
 VERIFY_ONLY=false
 FORCE=false
-FAILED=()
-SUCCEEDED=()
-SKIPPED=()
+SPECIFIC_FLAVOR=""
 
-# Parse args
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY_RUN=true ;;
-    --verify) VERIFY_ONLY=true ;;
-    --force) FORCE=true ;;
-    --help|-h)
-      echo "Usage: $0 [--dry-run] [--verify] [--force]"
-      exit 0
-      ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run)   DRY_RUN=true ;;
+    --verify)    VERIFY_ONLY=true ;;
+    --force)     FORCE=true ;;
+    --flavor)    shift; SPECIFIC_FLAVOR="$1" ;;
+    *)           echo "Unknown option: $1"; exit 2 ;;
   esac
+  shift
 done
 
-cd "$REPO_DIR"
+cd "$REPO_ROOT"
 
-# Verify we're in a git repo
-if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-  echo "❌ Not a git repository: $REPO_DIR"
+# === Verify we're in the right repo ===
+if [ ! -d ".git" ]; then
+  echo "❌ Not a git repository: $REPO_ROOT"
   exit 2
 fi
 
-# Get current HEAD
-LOCAL_SHA=$(git rev-parse HEAD)
-LOCAL_SHORT=$(git rev-parse --short HEAD)
-LOCAL_MSG=$(git log -1 --format="%s")
+if [ ! -d "packages/core" ]; then
+  echo "❌ packages/core/ not found. Is this the monorepo?"
+  exit 2
+fi
 
-echo "🔄 Morpheus Skill Ecosystem Sync"
-echo "   Branch: $BRANCH"
-echo "   Commit: $LOCAL_SHORT — $LOCAL_MSG"
-echo "   Remotes: $(git remote | wc -l | tr -d ' ')"
-echo ""
+# === Canonical remotes (get full monorepo push) ===
+CANONICAL_REMOTES="origin everclaw-org"
 
-# Skip non-flavor remotes
-SKIP_REMOTES="everclaw-fork"
-
-# Categorize remotes
-ORIGIN_REMOTE="origin"
-ORG_REMOTE="everclaw-org"
-FLAVOR_REMOTES=()
-
-for remote in $(git remote | sort); do
-  case "$remote" in
-    origin|everclaw-org|everclaw-fork) ;; # handled separately
-    *) FLAVOR_REMOTES+=("$remote") ;;
-  esac
-done
-
-sync_remote() {
-  local remote=$1
-  local label=$2
-
-  # Check if remote is already in sync
-  local remote_sha
-  remote_sha=$(git ls-remote "$remote" refs/heads/$BRANCH 2>/dev/null | cut -f1) || true
-
-  if [ "$remote_sha" = "$LOCAL_SHA" ]; then
-    SKIPPED+=("$remote")
-    printf "  ⏭️  %-25s already in sync\n" "$remote"
-    return 0
-  fi
-
-  if $VERIFY_ONLY; then
-    local remote_short="${remote_sha:0:7}"
-    printf "  ❌ %-25s out of sync (remote: %s)\n" "$remote" "${remote_short:-empty}"
-    FAILED+=("$remote")
-    return 1
-  fi
-
-  if $DRY_RUN; then
-    printf "  🔍 %-25s would push %s → %s\n" "$remote" "$LOCAL_SHORT" "${remote_sha:0:7}"
-    SUCCEEDED+=("$remote")
-    return 0
-  fi
-
-  # Push
-  local push_args=("--no-verify" "$remote" "$BRANCH")
-  if $FORCE; then
-    push_args=("--no-verify" "--force" "$remote" "$BRANCH")
-  fi
-
-  local push_output
-  if push_output=$(git push "${push_args[@]}" 2>&1); then
-    # Show last line of output (e.g. "abcdef0..1234567  main -> main")
-    [[ -n "$push_output" ]] && echo "$push_output" | tail -1
-    SUCCEEDED+=("$remote")
-    printf "  ✅ %-25s pushed\n" "$remote"
-    return 0
-  else
-    # Show full error for debugging
-    [[ -n "$push_output" ]] && echo "$push_output" | tail -3
-    FAILED+=("$remote")
-    printf "  ❌ %-25s FAILED\n" "$remote"
-    return 1
-  fi
+# === Collect flavor remotes ===
+get_flavor_remotes() {
+  git remote | while read remote; do
+    # Skip canonical remotes
+    case "$remote" in
+      origin|everclaw-org) continue ;;
+    esac
+    # Must have a matching flavors/ directory
+    if [ -d "flavors/$remote" ] && [ -f "flavors/$remote/flavor.json" ]; then
+      echo "$remote"
+    else
+      echo "⚠️  Remote '$remote' has no matching flavors/$remote/flavor.json — skipping" >&2
+    fi
+  done
 }
 
-# 1. Push to origin first
-echo "📦 Origin (morpheus-skill canonical)"
-sync_remote "$ORIGIN_REMOTE" "origin" || true
+TOTAL_OK=0
+TOTAL_FAIL=0
+TOTAL_SKIP=0
+RESULTS=""
+
+# === Step 1: Push full monorepo to canonical remotes ===
+echo "━━━ Ecosystem Sync (Monorepo Mode) ━━━"
+echo "Repo: $REPO_ROOT"
+echo "Date: $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo ""
 
-# 2. Push to org repo
-echo "🏢 Org (EverClaw/EverClaw)"
-sync_remote "$ORG_REMOTE" "org" || true
-echo ""
+if [ -z "$SPECIFIC_FLAVOR" ]; then
+  echo "📦 Phase 1: Push full monorepo to canonical remotes"
+  for remote in $CANONICAL_REMOTES; do
+    if ! git remote get-url "$remote" >/dev/null 2>&1; then
+      echo "  ⚠️  $remote — remote not found, skipping"
+      TOTAL_SKIP=$((TOTAL_SKIP + 1))
+      continue
+    fi
+    
+    url=$(git remote get-url "$remote")
+    echo -n "  → $remote ($url) ... "
+    
+    if $VERIFY_ONLY; then
+      echo "VERIFY MODE — skipping push"
+      continue
+    fi
+    
+    if $DRY_RUN; then
+      echo "DRY RUN — would push main"
+      continue
+    fi
+    
+    PUSH_ARGS="main"
+    $FORCE && PUSH_ARGS="--force main"
+    
+    if git push --no-verify "$remote" $PUSH_ARGS 2>/dev/null; then
+      echo "✅"
+      TOTAL_OK=$((TOTAL_OK + 1))
+      RESULTS="${RESULTS}✅ $remote\n"
+    else
+      echo "❌"
+      TOTAL_FAIL=$((TOTAL_FAIL + 1))
+      RESULTS="${RESULTS}❌ $remote\n"
+    fi
+  done
+  echo ""
+fi
 
-# 3. Push to all flavor repos
-echo "🌈 Flavor repos (${#FLAVOR_REMOTES[@]})"
-for remote in "${FLAVOR_REMOTES[@]}"; do
-  # Skip explicitly excluded remotes
-  if [[ " $SKIP_REMOTES " == *" $remote "* ]]; then
-    SKIPPED+=("$remote")
-    printf "  ⏭️  %-25s skipped (excluded)\n" "$remote"
+# === Step 2: Compose and push flavor repos ===
+echo "🧩 Phase 2: Compose and push flavor repos"
+
+if [ -n "$SPECIFIC_FLAVOR" ]; then
+  FLAVOR_REMOTES="$SPECIFIC_FLAVOR"
+else
+  FLAVOR_REMOTES=$(get_flavor_remotes)
+fi
+
+for remote in $FLAVOR_REMOTES; do
+  if [ ! -d "flavors/$remote" ]; then
+    echo "  ⚠️  $remote — no flavors/$remote directory, skipping"
+    TOTAL_SKIP=$((TOTAL_SKIP + 1))
     continue
   fi
-  sync_remote "$remote" "flavor" || true
-done
-echo ""
-
-# Summary
-TOTAL=$((${#SUCCEEDED[@]} + ${#FAILED[@]} + ${#SKIPPED[@]}))
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📊 Sync Summary"
-echo "   Total remotes: $TOTAL"
-echo "   ✅ Pushed:     ${#SUCCEEDED[@]}"
-echo "   ⏭️  In sync:    ${#SKIPPED[@]}"
-echo "   ❌ Failed:     ${#FAILED[@]}"
-
-if [ ${#FAILED[@]} -gt 0 ]; then
-  echo ""
-  echo "   Failed remotes:"
-  for r in "${FAILED[@]}"; do
-    echo "   - $r"
-  done
-fi
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# ─── SmartAgent Sync Check ─────────────────────────────────────
-# SmartAgent has its own content but references EverClaw.
-# We verify it's reachable and log its HEAD for awareness.
-echo ""
-echo "📱 SmartAgent (SmartAgentProtocol/smartagent)"
-SMART_SHA=$(git ls-remote https://github.com/SmartAgentProtocol/smartagent.git refs/heads/main 2>/dev/null | cut -f1) || true
-if [ -n "$SMART_SHA" ]; then
-  SMART_SHORT="${SMART_SHA:0:7}"
-  # Check local clone if it exists
-  SMART_LOCAL="$HOME/.openclaw/workspace/smartagent"
-  if [ -d "$SMART_LOCAL/.git" ]; then
-    LOCAL_SMART_SHA=$(git -C "$SMART_LOCAL" rev-parse HEAD 2>/dev/null) || true
-    if [ "$LOCAL_SMART_SHA" = "$SMART_SHA" ]; then
-      printf "  ⏭️  %-25s in sync (%s)\n" "smartagent" "$SMART_SHORT"
-    else
-      LOCAL_SMART_SHORT="${LOCAL_SMART_SHA:0:7}"
-      printf "  ⚠️  %-25s local (%s) differs from remote (%s)\n" "smartagent" "$LOCAL_SMART_SHORT" "$SMART_SHORT"
-      if ! $DRY_RUN && ! $VERIFY_ONLY; then
-        git -C "$SMART_LOCAL" pull --rebase origin main 2>&1 | tail -1
-        printf "  ✅ %-25s synced\n" "smartagent"
-      fi
-    fi
-  else
-    printf "  ℹ️  %-25s remote HEAD: %s (no local clone)\n" "smartagent" "$SMART_SHORT"
+  
+  url=$(git remote get-url "$remote" 2>/dev/null || echo "UNKNOWN")
+  flavor_name=$(jq -r ".name" "flavors/$remote/flavor.json" 2>/dev/null || echo "$remote")
+  echo -n "  → $remote ($flavor_name) ... "
+  
+  if $VERIFY_ONLY; then
+    echo "VERIFY MODE — skipping"
+    continue
   fi
-else
-  printf "  ❌ %-25s unreachable\n" "smartagent"
-fi
+  
+  if $DRY_RUN; then
+    echo "DRY RUN — would compose and push"
+    continue
+  fi
+  
+  # Compose the flavor
+  COMPOSE_OUT="$WORK_DIR/$remote"
+  if ! "$COMPOSE_SCRIPT" "flavors/$remote" "$COMPOSE_OUT" >/dev/null 2>&1; then
+    echo "❌ (compose failed)"
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    RESULTS="${RESULTS}❌ $remote (compose)\n"
+    continue
+  fi
+  
+  # Clone the remote into a temp bare repo for pushing
+  PUSH_DIR="$WORK_DIR/${remote}-push"
+  rm -rf "$PUSH_DIR"
+  
+  # Clone existing remote (shallow)
+  if ! git clone --depth 1 "$url" "$PUSH_DIR" 2>/dev/null; then
+    echo "❌ (clone failed)"
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    RESULTS="${RESULTS}❌ $remote (clone)\n"
+    continue
+  fi
+  
+  # Replace contents with composed output
+  cd "$PUSH_DIR"
+  # Remove all tracked files except .git
+  git ls-files -z | xargs -0 rm -f 2>/dev/null || true
+  # Copy composed files
+  cp -a "$COMPOSE_OUT"/* "$PUSH_DIR/" 2>/dev/null || true
+  cp -a "$COMPOSE_OUT"/.[!.]* "$PUSH_DIR/" 2>/dev/null || true
+  
+  # Stage, commit, push
+  git add -A
+  if git diff --cached --quiet; then
+    echo "✅ (no changes)"
+    TOTAL_OK=$((TOTAL_OK + 1))
+    RESULTS="${RESULTS}✅ $remote (no changes)\n"
+  else
+    COMMIT_MSG="sync: compose from monorepo $(date '+%Y-%m-%d %H:%M')"
+    git commit -m "$COMMIT_MSG" >/dev/null 2>&1
+    
+    PUSH_ARGS="main"
+    $FORCE && PUSH_ARGS="--force main"
+    
+    if git push --no-verify origin $PUSH_ARGS 2>/dev/null; then
+      echo "✅"
+      TOTAL_OK=$((TOTAL_OK + 1))
+      RESULTS="${RESULTS}✅ $remote\n"
+    else
+      echo "❌ (push failed)"
+      TOTAL_FAIL=$((TOTAL_FAIL + 1))
+      RESULTS="${RESULTS}❌ $remote\n"
+    fi
+  fi
+  
+  cd "$REPO_ROOT"
+done
+
+# === Summary ===
 echo ""
+echo "━━━ Summary ━━━"
+echo -e "$RESULTS"
+echo "✅ OK: $TOTAL_OK | ❌ Failed: $TOTAL_FAIL | ⚠️ Skipped: $TOTAL_SKIP"
 
-# Write sync status to a file for cron/shift consumption
-cat > "$REPO_DIR/scripts/.last-sync.json" << SYNCJSON
-{
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "commit": "$LOCAL_SHA",
-  "commitShort": "$LOCAL_SHORT",
-  "commitMessage": "$LOCAL_MSG",
-  "branch": "$BRANCH",
-  "total": $TOTAL,
-  "pushed": ${#SUCCEEDED[@]},
-  "inSync": ${#SKIPPED[@]},
-  "failed": ${#FAILED[@]},
-  "failedRemotes": [$(if [ ${#FAILED[@]} -gt 0 ]; then printf '"%s",' "${FAILED[@]}" | sed 's/,$//'; fi)]
-}
-SYNCJSON
-
-if [ ${#FAILED[@]} -gt 0 ]; then
+if [ "$TOTAL_FAIL" -gt 0 ]; then
   exit 1
-else
-  exit 0
 fi
+exit 0

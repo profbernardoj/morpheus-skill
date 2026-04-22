@@ -2,6 +2,23 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.22.1638] - 2026-04-22
+
+### Changed — Monorepo Restructure
+
+**Architecture overhaul:** Reorganized flat repo into monorepo with composed flavor deployment.
+
+- **New `packages/core/`:** All common Morpheus infrastructure (scripts, tests, references, docs, templates, Docker, config)
+- **New `flavors/`:** 29 thin per-flavor directories with `flavor.json` + `README.md` + optional templates
+- **New `scripts/flavor-compose.sh`:** Composes core + flavor overlay into a deployable repo
+- **Rewritten `scripts/ecosystem-sync.sh`:** Canonical remotes get full monorepo; flavor remotes get composed artifacts
+- **New `archive/`:** Deprecated content (alternative installers, marketing, analytics, one-time tools)
+- **Removed `claw-repos/`:** Per-flavor duplicated directories eliminated (was 28 × full copy)
+- **Moved `everclaw-docker/` and `everclaw-key-api/`:** Now under `packages/core/` for automatic inclusion in composed flavors
+- All flavor READMEs note they are generated from the monorepo
+- Root README updated with monorepo architecture, "Adding a New Flavor" guide
+- Uses `rsync` for robust core copying (new files auto-included), `jq` for JSON parsing
+
 ## [2026.4.22.1314] - 2026-04-22
 
 ### Changed — OpenClaw Pin v2026.4.15 → v2026.4.21

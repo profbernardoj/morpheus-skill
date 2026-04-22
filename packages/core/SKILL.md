@@ -1,6 +1,6 @@
 ---
 name: everclaw
-version: 2026.4.22.1638
+version: 2026.4.22.1314
 description: Open-source first AI inference — GLM-5 as default, Claude as fallback only. Own your inference forever via the [REDACTED] decentralized network. Stake MOR tokens, access GLM-5, GLM-4.7 Flash, Kimi K2.5, and 30+ models with persistent inference by recycling staked MOR. Open-source first model router routes all tiers to [REDACTED] by default — Claude only kicks in as an escape hatch when needed. Includes [REDACTED] API Gateway bootstrap for zero-config startup, OpenAI-compatible proxy with auto-session management, automatic retry with fresh sessions, OpenAI-compatible error classification to prevent cooldown cascades, multi-key auth rotation v2 with proactive DIEM balance monitoring and reactive 402 watchdog, Gateway Guardian v5 with direct curl inference probes (eliminates Signal spam), proactive Venice DIEM credit monitoring, circuit breaker for stuck sub-agents, nuclear self-healing restart, always-on proxy-router with launchd auto-restart, smart session archiver, three-shift cyclic execution engine (v2 with 15-minute execution loops), 24/7 always-on power configuration for macOS, bundled security skills, zero-dependency wallet management via macOS Keychain, x402 payment client for agent-to-agent USDC payments, ERC-8004 agent registry reader for discovering trustless agents on Base, and hardware-aware local Ollama fallback with auto model selection (Gemma 4 family: E2B/E4B/26B/31B with vision + audio, based on available RAM/GPU).
 homepage: https://everclaw.com
 metadata:
@@ -63,34 +63,6 @@ metadata:
       note: "curl | bash installer available but users should review scripts before executing. All scripts are open source at github.com/EverClaw/EverClaw."
     tags: ["inference", "everclaw", "morpheus", "mor", "decentralized", "ai", "blockchain", "base", "persistent", "fallback", "guardian", "security", "three-shifts", "task-planning"]
 ---
-
-<!-- ─── MONOREPO STRUCTURE ─────────────── -->
-
-## 📁 Repository Structure (Monorepo)
-
-This is a **monorepo** that produces 28+ flavor repos via composition:
-
-```
-packages/
-  core/              # Common Morpheus infrastructure (scripts, tests, docs, templates)
-everclaw-docker/   # Docker build for EverClaw
-  everclaw-key-api/  # Vercel key API service
-flavors/
-  morpheus-skill/    # Canonical default flavor
-  bitcoinclaw.ai/    # Bitcoin ecosystem flavor
-  emailclaw.org/     # Email management flavor
-  ...                # 28 total flavor directories
-scripts/
-  ecosystem-sync.sh  # Composes core + flavor → pushes to flavor remotes
-  flavor-compose.sh  # Composes a single flavor into a deployable repo
-skills/              # Bundled skills (security, chat, etc.)
-archive/             # Archived alternative installers, marketing, one-time tools
-```
-
-**Canonical remotes** (`origin`, `everclaw-org`) receive the full monorepo.  
-**Flavor remotes** receive composed output: `packages/core/*` + `flavors/<name>/*`.
-
-See `scripts/ecosystem-sync.sh` for the sync workflow.
 
 <!-- ─── AGENT INSTRUCTIONS (read by OpenClaw agents) ─────────────── -->
 
