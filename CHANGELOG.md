@@ -2,6 +2,20 @@
 
 All notable changes to EverClaw are documented here.
 
+## [VERSIONPLACEHOLDER] - 2026-04-22
+
+### Changed — Skill Frontmatter & Cleanup
+
+Cherry-picked improvements from community PR #15 (yogesh-tessl):
+
+- **Added YAML frontmatter** to 5 skills: `agent-chat`, `night-shift`, `pii-guard`, `prompt-guard`, `xmtp-comms-guard`
+  - Structured `name` and `description` with `Use when` clauses for agent discovery
+  - Consistent double-quoted string format across all skills
+  - EverClaw branding standardized across all descriptions
+- **Removed duplicate section** from `agent-chat/SKILL.md`: second "Daemon Management" block (88 lines) was identical to the first
+- **Preserved all security content** in `prompt-guard/SKILL.md`: inline detection patterns, changelogs, and incident context retained (rejected PR's removal of these)
+
+
 ## [2026.4.22.1638] - 2026-04-22
 
 ### Changed — Monorepo Restructure
