@@ -2,7 +2,7 @@
 
 All notable changes to EverClaw are documented here.
 
-## [VERSIONPLACEHOLDER] - 2026-04-22
+## [2026.4.22.1820] - 2026-04-22
 
 ### Changed — Skill Frontmatter & Cleanup
 
