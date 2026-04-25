@@ -2,6 +2,21 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.25.0441] - 2026-04-25
+
+### Fixed — BACK-015: install-with-deps.sh False-Positive Dependency Reporting
+
+- **Bug:** `verify_installed()` return values were discarded in `install_dep()` for `curl`, `git`, `npm`, and `OpenClaw` cases. The function could return 0 (success) even when dependency installation failed, causing confusing output where users saw checkmarks but dependencies were missing.
+- **Fix:** All `verify_installed` calls now propagate their return values via `|| return 1`:
+  - `curl`: added `|| return 1` after verify call
+  - `git` (macOS with brew): moved verify inside brew branch with `|| return 1`
+  - `git` (macOS without brew): changed to `log_err` + `return 1` (was `log_warn` only)
+  - `git` (Linux): moved verify inside Linux branch with `|| return 1`
+  - `npm`: restructured as early-return-on-success, install path with `|| return 1`
+  - `OpenClaw`: added `|| return 1` after verify call
+- **Files:** `packages/core/scripts/install-with-deps.sh` (17 insertions, 14 deletions)
+- **SOP-001:** Stages 0-7 complete. Grok 4.20: Perfect. Cross-model (DeepSeek V4 Pro): Perfect.
+
 ## [2026.4.25.0259] - 2026-04-25
 
 ### Fixed — Monorepo Path Issues
