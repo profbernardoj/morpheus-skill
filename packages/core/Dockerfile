@@ -124,7 +124,9 @@ COPY --from=openclaw-builder --chown=node:node /everclaw-skill /home/node/.openc
 # Copy flavor overlays into the skill directory (monorepo: flavors/ is at repo root)
 COPY --chown=node:node flavors /home/node/.openclaw/workspace/skills/everclaw/flavors
 
-# Install EverClaw dependencies (x402, viem for finance tracker)
+# Install EverClaw runtime dependencies in the OpenClaw workspace.
+# These are also declared in root package.json for CI testing, but Docker
+# installs them here because the skill runs inside OpenClaw's workspace.
 WORKDIR /home/node/.openclaw/workspace
 RUN npm init -y 2>/dev/null; \
     npm install --omit=dev @x402/fetch @x402/evm viem argon2 2>/dev/null || true

@@ -23,6 +23,11 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@x402/evm": "^2.10.0",
+    "@x402/fetch": "^2.10.0",
     "argon2": "^0.41.1"
+  },
+  "devDependencies": {
+    "viem": "^2.48.4"
   }
 }
