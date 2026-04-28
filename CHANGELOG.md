@@ -2,6 +2,44 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.28.0352] - 2026-04-28
+
+### Changed — OpenClaw Pin v2026.4.25 → v2026.4.26
+
+- **Dockerfile:** OpenClaw build target updated from `v2026.4.25` to `v2026.4.26`
+- **docker-compose.yml:** Image tag and build arg updated
+
+### Upstream Highlights (OpenClaw v2026.4.25 → v2026.4.26)
+
+#### New Features
+- **Cerebras provider:** Bundled plugin with onboarding, static model catalog, and manifest-owned endpoint metadata
+- **Asymmetric embeddings:** `memorySearch.inputType`, `queryInputType`, `documentInputType` config for smarter memory search with asymmetric embedding endpoints
+- **Ollama query prefixes:** Model-specific retrieval prefixes for nomic-embed-text, qwen3-embedding, and mxbai-embed-large
+- **Transcript compaction preflight:** Opt-in `maxActiveTranscriptBytes` auto-compacts when JSONL grows too large
+- **Claude + Hermes importers:** `openclaw migrate` with plan, dry-run, JSON output, and pre-migration backup
+- **Matrix E2EE:** One-command Matrix encryption setup with bootstrap recovery
+- **Config diff panel:** Control UI shows pending config changes with JSON5 parsing and sensitive value redaction
+- **Google Live Talk:** Browser realtime transport with constrained ephemeral tokens and Gateway relay
+- **Plugin layered deps:** `OPENCLAW_PLUGIN_STAGE_DIR` supports read-only preinstalled deps before writable root
+
+#### Fixes (30+ Ollama fixes)
+- Custom provider prefix stripping, native thinking effort levels, VRAM/context defaults, auth scoping, vision modality preservation, web search routing, timeout/keepalive threading, embedding endpoint migration, duplicate model ID prevention, and more
+- **EPIPE crash guard:** Broken-pipe stream errors no longer crash the Gateway
+- **Bonjour hardening:** Cancellation handlers preserved across advertiser restarts
+- **Cron isolation:** Isolated cron jobs get run-scoped context keys (no prior-run bleed)
+- **sessions_spawn aliases:** Bare model aliases now resolve correctly for subagent overrides
+- **npm update safety:** Updates use temp prefix before swapping package tree
+- **Link understanding:** URL-bearing messages no longer dropped after stale runtime chunk upgrades
+- **Docker CA certs:** Slim runtime image now includes CA certificate bundle for HTTPS
+- **Chokidar v5 hot reloads:** Skill and memory file watching restored
+
+#### Security
+- Device token echo fix (rotated tokens no longer leaked in shared/admin responses)
+- Transcript redaction patterns now applied to persisted JSONL
+- Exec approvals accept symlinked `OPENCLAW_HOME` while rejecting symlinked path components below it
+
+(Reference: https://github.com/openclaw/openclaw/releases/tag/v2026.4.26)
+
 ## [2026.4.28.0145] - 2026-04-28
 
 ### Changed — OpenClaw Pin v2026.4.23 → v2026.4.25
