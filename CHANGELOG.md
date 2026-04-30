@@ -2,6 +2,49 @@
 
 All notable changes to EverClaw are documented here.
 
+## [2026.4.30.2333] - 2026-04-30
+
+### Changed — OpenClaw Pin v2026.4.26 → v2026.4.29
+
+- **Dockerfile:** OpenClaw build target updated from `v2026.4.26` to `v2026.4.29`
+- **docker-compose.yml:** Image tag and build arg updated
+
+### Upstream Highlights (OpenClaw v2026.4.26 → v2026.4.29)
+
+#### New Features
+- **NVIDIA provider:** API-key onboarding, static model catalog, literal model-ref picker
+- **Commitments system:** Opt-in inferred follow-up commitments with hidden batched extraction, per-agent/per-channel scoping, heartbeat delivery, CLI management, `commitments.enabled`/`commitments.maxPerDay` config
+- **Memory wiki:** People metadata, provenance views, relationship graphs, per-conversation Active Memory filters, partial recall on timeout, bounded REM preview diagnostics
+- **Active-run steering:** Default active-run queueing to steer with 500ms debounce fallback, dedicated steering queue docs
+- **Spawned subagent routing:** Subagent metadata propagated for visible-reply enforcement
+
+#### Fixes
+- **Tool profile safety:** Configured tool sections (tools.exec, tools.fs) no longer implicitly widen restrictive profiles; startup warning identifies affected configs
+- **Stale-session recovery:** Orphan recovery bounded with persisted attempts and wedged-session tombstone; task doctor reconciles automatically
+- **Browser config refresh:** CLI status/start honors configured executablePath, headless, and noSandbox instead of stale auto-detection
+- **systemd exit codes:** Exit 78 for lock/EADDRINUSE conflicts stops Restart=always loops
+- **Telegram group fix:** Blank visible user prompts skipped at embedded-runner boundary (no more raw empty-input provider errors)
+- **Discord/Slack fallback:** Auto-reply falls back to automatic source delivery when message tool unavailable
+- **Codex streams:** Existing wrapped Codex streams preserved during OpenAI attribution; unsupported Codex-only fields stripped without touching custom endpoints
+- **Token budget:** Tool-result overflow uses resolved runtime context token budget (no more early compaction)
+
+#### Security
+- **OpenGrep scanning:** Precise rulepack, source-rule compiler, provenance metadata check, PR/full scan workflows with SARIF upload to GitHub Code Scanning
+- **GHSA triage refinement:** Media/base64 decode overhead classified as performance-only unless demonstrating limit bypass, crash, exhaustion, or data exposure
+- **Web-fetch IPv6:** ULA opt-in for trusted proxy stacks
+
+#### Channels
+- **Slack:** Block Kit section limits enforced
+- **Telegram:** Proxy/webhook/polling/send resilience improvements
+- **Discord:** Startup and rate-limit handling fixes
+- **WhatsApp:** Delivery and liveness improvements
+- **Teams/Matrix/Feishu:** Edge case fixes
+
+#### Performance
+- Reusable model catalogs, event-loop readiness diagnostics, runtime-dependency repair, version-scoped update caches
+
+(Reference: https://github.com/openclaw/openclaw/releases/tag/v2026.4.29)
+
 ## [2026.4.28.1255] - 2026-04-28
 
 ### Fixed — Monorepo Path Resolution (Regression from v2026.4.22)
