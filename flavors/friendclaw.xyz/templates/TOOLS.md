@@ -22,6 +22,13 @@
 - Built into OpenClaw
 - Check weather for event planning ("Is Saturday good for the BBQ?")
 
+### tweetclaw (OpenClaw plugin)
+- **What:** X/Twitter automation for public tweet search, reply search, user lookup, follower export, media workflows, direct messages, monitors, webhooks, giveaway draws, and approved posting
+- **Install:** `openclaw plugins install @xquik/tweetclaw`
+- **Source:** https://github.com/Xquik-dev/tweetclaw
+- **Use:** Opt-in social context, public profile checks, reply drafting, event coordination, and giveaway coordination
+- **Boundary:** Search public posts only and ask before posting tweets, replies, direct messages, media, or exports
+
 ## Configuration
 
 ### Contact Tiers

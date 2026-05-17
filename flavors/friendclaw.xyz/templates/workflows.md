@@ -41,3 +41,8 @@ Agent checks RSVPs for the event, lists confirmed/pending/declined, and suggests
 > "Am I being a good friend?"
 
 Agent provides a candid review: who you've been great about staying in touch with, who's been neglected, and upcoming opportunities to show up for people.
+
+### 9. X/Twitter Social Context
+> "Check whether Alice posted anything public about the meetup"
+
+If TweetClaw is installed, agent searches public tweets and replies for user-approved handles, summarizes only relevant public context, and asks before drafting or posting tweets, replies, direct messages, or media.
