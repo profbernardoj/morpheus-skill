@@ -1,6 +1,6 @@
 import express from "express";
 import Database from "better-sqlite3";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import helmet from "helmet";
@@ -101,6 +101,14 @@ app.use(express.json({ limit: "16kb" }));
 app.set("trust proxy", 1);
 
 // --- Helpers ---
+// Fail-closed, constant-time admin auth check: requires a non-empty SECRET
+// and a header value of the same length that matches byte-for-byte.
+function isAdminAuthorized(req) {
+  if (!SECRET) return false;
+  const provided = req.headers["x-admin-secret"];
+  if (typeof provided !== "string" || provided.length !== SECRET.length) return false;
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(SECRET));
+}
 const genKey = () => "evcl_" + randomBytes(16).toString("hex");
 const exp = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 const genClaimCode = () => `EVER-${randomBytes(8).toString("hex").toUpperCase()}-${randomBytes(8).toString("hex").toUpperCase()}`;
@@ -161,7 +169,7 @@ app.post("/api/keys/request", async (req, res) => {
 
 // Admin stats
 app.get("/api/stats", (req, res) => {
-  if (!SECRET || req.headers["x-admin-secret"] !== SECRET) {
+  if (!isAdminAuthorized(req)) {
     return res.status(401).json({ error: "unauthorized" });
   }
   const stats = db.prepare(
@@ -189,10 +197,10 @@ const LIMIT_LUA = `
 
 // POST /bootstrap/challenge
 app.post("/bootstrap/challenge", async (req, res) => {
-  if (!SECRET || req.headers["x-admin-secret"] !== SECRET) {
+  if (!isAdminAuthorized(req)) {
     return res.status(401).json({ error: "unauthorized" });
   }
-  if (!redis) return res.status(503).json({ error: "Redis not configured" });
+  if (!redis) return res.status(503).json({ error: "service unavailable" });
 
   const { fingerprint, timestamp } = req.body;
   if (!fingerprint || !timestamp) {
@@ -218,10 +226,10 @@ app.post("/bootstrap/challenge", async (req, res) => {
 
 // POST /bootstrap
 app.post("/bootstrap", async (req, res) => {
-  if (!SECRET || req.headers["x-admin-secret"] !== SECRET) {
+  if (!isAdminAuthorized(req)) {
     return res.status(401).json({ error: "unauthorized" });
   }
-  if (!redis) return res.status(503).json({ error: "Redis not configured" });
+  if (!redis) return res.status(503).json({ error: "service unavailable" });
 
   const { wallet, fingerprint, challengeNonce, solution, timestamp } = req.body;
 
@@ -295,10 +303,10 @@ app.post("/bootstrap", async (req, res) => {
 
 // POST /verify-xpost
 app.post("/verify-xpost", async (req, res) => {
-  if (!SECRET || req.headers["x-admin-secret"] !== SECRET) {
+  if (!isAdminAuthorized(req)) {
     return res.status(401).json({ error: "unauthorized" });
   }
-  if (!redis) return res.status(503).json({ error: "Redis not configured" });
+  if (!redis) return res.status(503).json({ error: "service unavailable" });
 
   const { wallet, claimCode } = req.body;
   if (!wallet || !claimCode) {
@@ -326,10 +334,10 @@ app.post("/verify-xpost", async (req, res) => {
 
 // DELETE /forget (GDPR)
 app.delete("/forget", async (req, res) => {
-  if (!SECRET || req.headers["x-admin-secret"] !== SECRET) {
+  if (!isAdminAuthorized(req)) {
     return res.status(401).json({ error: "unauthorized" });
   }
-  if (!redis) return res.status(503).json({ error: "Redis not configured" });
+  if (!redis) return res.status(503).json({ error: "service unavailable" });
 
   const { wallet, fingerprintHash } = req.body;
 
