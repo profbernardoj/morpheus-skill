@@ -25,4 +25,3 @@ MIT
 ---
 
 > **Note:** This repository is automatically composed from the [morpheus-skill monorepo](https://github.com/profbernardoj/morpheus-skill). Please submit PRs and issues against the monorepo, not this flavor repo.
-// trigger rebuild
