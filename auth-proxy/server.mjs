@@ -243,6 +243,60 @@ async function validateConfig() {
 const consumedHandoffTokens = new Map();
 const HANDOFF_TOKEN_TTL_MS = 90_000; // 90 seconds (matches JWT TTL)
 
+// ─── BACK-IOC-016: Handoff observability counters ───────────────────────────
+// In-memory counters for every SSO handoff outcome. Exposed via /health
+// (aggregate counts only, no PII) and /internal/diag (adds a bounded
+// recent-events ring buffer). Resets on process restart.
+// Companion durable (DB) counters for the generate side live in the
+// handoff_events table (Edge Function side). Container-side rejections are
+// ALSO emitted as structured ISO-prefixed log lines:
+//   [handoff] <ISO> <EVENT> <detail...>
+// so fleet-wide aggregation via fred-ops logs stays possible.
+const HANDOFF_METRIC_EVENTS = [
+  'no_token', 'rate_limited', 'jwt_failed', 'already_consumed_inmem',
+  'fqdn_mismatch', 'owner_check_failed', 'owner_verify_error',
+  'db_rejected', 'success', 'error', 'sso_disabled',
+];
+const handoffMetrics = {
+  since: new Date().toISOString(),
+  counters: Object.fromEntries(HANDOFF_METRIC_EVENTS.map((e) => [e, 0])),
+  lastEvents: [], // ring buffer, newest last, max 20 entries
+};
+const HANDOFF_LAST_EVENTS_MAX = 20;
+
+function recordHandoffMetric(event, detail) {
+  if (!(event in handoffMetrics.counters)) {
+    // Unknown event names still count (future-proof) but keep the map shape.
+    handoffMetrics.counters[event] = 0;
+  }
+  handoffMetrics.counters[event] += 1;
+  // Ring-buffer entries carry NO sub/jti/email — /health is unauthenticated.
+  // Identifying detail goes to structured logs only.
+  handoffMetrics.lastEvents.push({ at: new Date().toISOString(), event, detail: detail || null });
+  if (handoffMetrics.lastEvents.length > HANDOFF_LAST_EVENTS_MAX) {
+    handoffMetrics.lastEvents.shift();
+  }
+}
+
+function getHandoffMetricsSnapshot() {
+  return {
+    since: handoffMetrics.since,
+    counters: { ...handoffMetrics.counters },
+    lastEvents: handoffMetrics.lastEvents.slice(-HANDOFF_LAST_EVENTS_MAX),
+  };
+}
+
+// Structured handoff log line: ISO-8601 timestamp + stable event token.
+// Keeps the legacy `[handoff]` prefix so existing fred-ops grep patterns work.
+// Event tokens match the generate-side log vocabulary so fleet grep aggregates cleanly.
+function handoffLog(event, message) {
+  console.log(`[handoff] ${new Date().toISOString()} ${event} ${message}`);
+}
+
+function handoffLogError(event, message) {
+  console.error(`[handoff] ${new Date().toISOString()} ${event} ${message}`);
+}
+
 // Prune expired entries every 30 seconds to prevent memory leak
 setInterval(() => {
   const now = Date.now();
@@ -273,13 +327,13 @@ async function dbConsumeHandoffToken(jti) {
       return { consumed: false, error: 'already_consumed' };
     }
     if (!resp.ok) {
-      console.error(`[handoff] consume-handoff returned ${resp.status}`);
+      handoffLogError('CONSUME_HTTP_ERROR', `consume-handoff returned ${resp.status}`);
       return { consumed: false, error: 'db_error' };
     }
     const result = await resp.json();
     return { consumed: !!result.consumed };
   } catch (err) {
-    console.error(`[handoff] consume-handoff error: ${err.message}`);
+    handoffLogError('CONSUME_FETCH_ERROR', `consume-handoff error: ${err.message}`);
     return { consumed: false, error: 'db_unavailable' };
   }
 }
@@ -466,12 +520,51 @@ async function loadLoginPage() {
     const htmlPath = join(__dirname, 'login.html');
     let html = await readFile(htmlPath, 'utf8');
 
-    // Inject configuration values at serve time
-    html = html.replace(/__PRIVY_APP_ID__/g, CONFIG.privyAppId);
-    html = html.replace(/__PRIVY_CLIENT_ID__/g, CONFIG.privyClientId);
-    html = html.replace(/__BRAND_ICON__/g, escapeHtml(CONFIG.brandIcon));
-    html = html.replace(/__BRAND_NAME__/g, escapeHtml(CONFIG.brandName));
-    html = html.replace(/__BRAND_TAGLINE__/g, escapeHtml(CONFIG.brandTagline));
+    // Inject configuration values at serve time.
+    // Function-form replacements: String.replace interprets "$&"/"$'"/"$`"/"$$"
+    // sequences in a STRING replacement, letting env-set brand values splice
+    // surrounding HTML. The function form substitutes literally.
+    //
+    // Placeholder contexts differ, so encoders differ:
+    // - BRAND_* placeholders land in HTML text/attribute context → escapeHtml.
+    // - PRIVY_* placeholders land inside a <script> block (JS string literal
+    //   context) → jsLit: JSON.stringify + '<' → '\u003c'. escapeHtml is
+    //   WRONG there (entities are not decoded inside <script>, and '/' is
+    //   never escaped so '</script>' would still break out). jsLit makes any
+    //   env value an inert string literal — quote/backslash/newline/control
+    //   chars and '</script>' sequences cannot escape the block.
+    const jsLit = (s) => JSON.stringify(String(s)).replace(/</g, '\\u003c');
+    html = html.replace(/__PRIVY_APP_ID__/g, () => jsLit(CONFIG.privyAppId));
+    html = html.replace(/__PRIVY_CLIENT_ID__/g, () => jsLit(CONFIG.privyClientId));
+    // Brand icon: a plain text value (emoji/unicode glyph) is escaped as-is.
+    // The "img:<path>" convention renders an image tag instead, so manifests
+    // can brand the login page with real artwork (e.g. the OpenClaw mascot
+    // served from /auth/logo.png). Hermes-style text glyphs are unaffected.
+    // Detection is trim + case-insensitive. The src must be a strict local
+    // image asset path — leading '/', NOT protocol-relative ('//') or
+    // backslash ('/\'), URL path+query charset only, and the path portion
+    // must reference an image file (.png/.svg/.webp; a query string is
+    // allowed for cache-busting, e.g. /auth/logo.png?v=20261021) — so
+    // external URLs, javascript:/data: URIs, non-image same-origin GETs,
+    // whitespace and control characters all fall back to the escaped-text
+    // path.
+    const brandIconValue = CONFIG.brandIcon.trim();
+    const brandIconSrc = brandIconValue.toLowerCase().startsWith('img:')
+      ? brandIconValue.slice(4).trim()
+      : '';
+    const brandIconPath = brandIconSrc.split('?')[0];
+    const isLocalImagePath =
+      brandIconPath.startsWith('/') &&
+      !brandIconPath.startsWith('//') &&
+      !brandIconPath.startsWith('/\\') &&
+      /^[A-Za-z0-9._~?=/-]*$/.test(brandIconSrc) &&
+      /\.(png|svg|webp)$/i.test(brandIconPath);
+    const brandIconHtml = isLocalImagePath
+      ? `<img src="${escapeHtml(brandIconSrc)}" alt="${escapeHtml(CONFIG.brandName)} logo" class="logo-img">`
+      : escapeHtml(CONFIG.brandIcon);
+    html = html.replace(/__BRAND_ICON__/g, () => brandIconHtml);
+    html = html.replace(/__BRAND_NAME__/g, () => escapeHtml(CONFIG.brandName));
+    html = html.replace(/__BRAND_TAGLINE__/g, () => escapeHtml(CONFIG.brandTagline));
 
     loginPageHtml = html;
     console.log('✅ Login page loaded');
@@ -553,13 +646,134 @@ const proxy = httpProxy.createProxyServer({
   ws: true,
   xfwd: true,
 });
+// Note (verified 2026-09-10): this ProxyServer is NOT a node
+// EventEmitter instance — http-proxy ships a custom emitter shim (on/once/
+// removeListener only, no setMaxListeners, no default-10 warning logic), so
+// per-request 'error' listeners here never trip MaxListenersExceededWarning.
 
-proxy.on('error', (error, req, res) => {
-  console.error('[proxy] Error:', error.message);
-  if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+// ─── Gateway warm-up retry (BACK-IOC-014 follow-up, 2026-09-10) ─────────────
+// The auth-proxy is health-gated BEFORE the OpenClaw gateway starts, so the
+// external endpoint can accept a request while the internal gateway is still
+// booting (plugin load, workspace scan, session restore — 10-30s cold start).
+// Claim-time relabels also restart the container, widening the window.
+// Without a retry, the user lands on a dead-end 502 that looks like failure
+// (regression seen 2026-09-10: first Launch after claim showed 502; only a
+// manual refresh recovered).
+//
+// Fix: on ECONNREFUSED/ECONNRESET from the internal gateway, retry the proxy
+// hop for up to GATEWAY_RETRY_MAX_ATTEMPTS with short backoff. GET requests
+// retry transparently (user just sees a slightly slower first load). Non-GET
+// requests are NOT retried (could double-apply side effects) — they get the
+// auto-refresh HTML page instead. WebSocket upgrades are untouched (the
+// Control UI client reconnects on its own).
+const GATEWAY_RETRY_BASE_MS = 750;     // first backoff step
+const GATEWAY_RETRY_MAX_ATTEMPTS = 12; // ~42s total with backoff
+
+function isGatewayBootError(err) {
+  const code = err && (err.code || err.errno);
+  return code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ECONNABORTED';
+}
+
+function proxyWithBootRetry(req, res) {
+  req.__bootRetryManaged = true;
+  // Listener ceilings: each attempt's proxy attaches library listeners to
+  // the same req/res; raised once for the request lifetime.
+  req.setMaxListeners(50);
+  res.setMaxListeners(50);
+  // Single lifecycle state for the whole retry chain (R7): one settled flag,
+  // one timer slot, one listener pair on res for the entire request.
+  const state = { settled: false, attempt: 0, timer: null };
+
+  const settle = () => {
+    state.settled = true;
+    if (state.timer) clearTimeout(state.timer);
+    res.removeListener('finish', onDone);
+    res.removeListener('close', onDone);
+  };
+  const onDone = () => settle();
+
+  const onError = (error) => {
+    if (state.settled) return;
+    console.error(`[proxy] Error (attempt ${state.attempt + 1}):`, error.message);
+    if (req.method === 'GET' && isGatewayBootError(error) && state.attempt < GATEWAY_RETRY_MAX_ATTEMPTS - 1) {
+      if (res.writableEnded || res.destroyed || req.aborted) { settle(); return; }
+      const delay = Math.min(GATEWAY_RETRY_BASE_MS * Math.pow(1.6, state.attempt), 5000);
+      console.log(`[proxy] Gateway booting — retry ${state.attempt + 1}/${GATEWAY_RETRY_MAX_ATTEMPTS} in ${Math.round(delay)}ms`);
+      state.attempt += 1;
+      state.timer = setTimeout(() => {
+        if (res.writableEnded || res.destroyed || req.aborted) { settle(); return; }
+        attempt();
+      }, delay);
+      return;
+    }
+    settle();
+    sendFinalBootError(req, res);
+  };
+
+  // Fresh proxy per attempt: a reused instance stacks its library-added
+  // listeners on req/res across retries; a pristine one keeps state clean
+  // and is GC'd when this attempt settles. Each instance serves exactly
+  // this request, so no cross-request error cross-talk.
+  const attempt = () => {
+    if (state.settled) return;
+    const attemptProxy = httpProxy.createProxyServer({
+      target: `http://127.0.0.1:${CONFIG.internalPort}`,
+      xfwd: true,
+    });
+    attemptProxy.on('error', onError);
+    try {
+      attemptProxy.web(req, res);
+    } catch (err) {
+      onError(err);
+    }
+  };
+
+  res.on('finish', onDone);
+  res.on('close', onDone);
+  attempt();
+}
+
+function sendFinalBootError(req, res) {
+  if (!res || typeof res.writeHead !== 'function' || res.headersSent) return;
+  if (req.method === 'GET') {
+    res.writeHead(502, bootPageHeaders());
+    serveBootPageBody(res);
+  } else {
     res.writeHead(502, { 'Content-Type': 'text/plain' });
     res.end('Bad Gateway — OpenClaw may still be starting');
   }
+}
+
+function bootPageHeaders() {
+  // Hardening headers on the boot page
+  return {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Retry-After': '3',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline';",
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'no-store, must-revalidate',
+  };
+}
+
+function serveBootPageBody(res) {
+  // Static page — no request data interpolated.
+  res.end(`<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="3">
+<title>Starting your agent…</title>
+<style>body{font-family:-apple-system,Segoe UI,sans-serif;background:#faf6ef;color:#333;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+.c{text-align:center;max-width:480px;padding:2em}.spin{display:inline-block;width:36px;height:36px;border:4px solid #e5ddd0;border-top-color:#c0392b;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:1.35em;margin:.6em 0}.s{color:#777;font-size:.9em}</style></head>
+<body><div class="c"><div class="spin"></div><h1>Starting your agent…</h1>
+<p>Your agent is booting up. This page continues automatically — usually within a few seconds.</p>
+<p class="s">Taking longer than 45 seconds? <a href="/">Click here to retry</a>.</p></div></body></html>`);
+}
+
+proxy.on('error', (error, req, res) => {
+  // Requests owned by proxyWithBootRetry handle their own errors (retry loop).
+  if (req && req.__bootRetryManaged) return;
+  console.error('[proxy] Error:', error.message);
+  sendFinalBootError(req, res);
 });
 
 // ─── Request Handler ─────────────────────────────────────────────────────────
@@ -809,7 +1023,7 @@ const EXPORT_UPLOAD_URL = process.env.AGENT_EXPORT_UPLOAD_URL || ''; // Edge Fun
 // /internal/export/start issues a token; /internal/export/bundle consumes it
 // exactly once and streams the file. Tokens expire after 10 min. The bundle
 // file is deleted after transfer (success, failure, timeout, or expiry).
-const BUNDLE_TOKEN_TTL_MS = 10 * 60_000;
+const BUNDLE_TOKEN_TTL_MS = parseInt(process.env.BUNDLE_TOKEN_TTL_MS || (10 * 60_000).toString(), 10);
 const BUNDLE_TOKEN_MAX = 32; // bounded map — exports are rare
 const bundleTokens = new Map(); // token -> { path, sizeBytes, expiresAt }
 
@@ -978,7 +1192,11 @@ async function handleInternalDiag(req, res) {
     res.end(JSON.stringify({ error: 'unauthorized' }));
     return;
   }
-  const payload = await getDiagnostics();
+  const base = await getDiagnostics();
+  // BACK-IOC-016: handoff metrics added OUTSIDE the cached payload —
+  // getDiagnostics() caches for DIAG_CACHE_TTL_MS and counters must be fresh.
+  // Shallow-copy so the cached object is never mutated (Grok IOC-016 R1).
+  const payload = { ...base, handoff: getHandoffMetricsSnapshot() };
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(payload));
 }
@@ -1153,7 +1371,7 @@ async function handleInternalExport(req, res) {
 
   // Child stderr: forward only when AGENT_EXPORT_DEBUG=1 (diagnostics).
   // Otherwise swallow it — the JSON contract is on stdout (maxBuffer 10 MB)
-  // and stderr must not bloat proxy logs (Grok R5-F5 / R6-F4).
+  // and stderr must not bloat proxy logs.
   if (process.env.AGENT_EXPORT_DEBUG === '1') {
     child.stderr?.on('data', (chunk) => {
       process.stderr.write(`[export-child] ${chunk}`);
@@ -1423,6 +1641,13 @@ async function handleRequest(req, res) {
         dynamicOwner: DYNAMIC_OWNER_MODE,
       },
       cig: fqdnStatus,
+      // BACK-IOC-016: aggregate handoff counters ONLY (counts, no detail, no
+      // PII — /health is unauthenticated). Full snapshot incl. recent-events
+      // ring buffer is on /internal/diag (binding-secret gated).
+      handoff: {
+        since: handoffMetrics.since,
+        counters: { ...handoffMetrics.counters },
+      },
     }));
     return;
   }
@@ -1434,7 +1659,10 @@ async function handleRequest(req, res) {
       const logoData = await readFile(logoPath);
       res.writeHead(200, {
         'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=604800, immutable',
+        // No 'immutable': the asset changes on rebrands (2026-10-21 mascot swap).
+        // 1-day max-age bounds the stale-logo window for returning users
+        // after a container upgrade; browsers revalidate on expiry.
+        'Cache-Control': 'public, max-age=86400',
         'X-Content-Type-Options': 'nosniff',
       });
       res.end(logoData);
@@ -1557,6 +1785,10 @@ async function handleRequest(req, res) {
   if (pathname === '/auth/handoff' && req.method === 'POST') {
     // SSO disabled — don't waste rate-limit slots or attempt JWT verify with empty key
     if (!CONFIG.handoffSigningSecret) {
+      // Dedicated counter: must NOT pollute jwt_failed (Grok IOC-016 R1 —
+      // fleet greps would misread disabled containers as verify failures).
+      recordHandoffMetric('sso_disabled');
+      handoffLog('SSO_DISABLED', 'SSO disabled — serving login page (404)');
       serveLoginPage(res, 404);
       return;
     }
@@ -1564,6 +1796,8 @@ async function handleRequest(req, res) {
     // Rate limit: 5 attempts per minute per IP (shared AUTH_RATE_LIMIT)
     const handoffIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
     if (isRateLimited(handoffIp)) {
+      recordHandoffMetric('rate_limited');
+      handoffLog('RATE_LIMITED', `ip=${handoffIp}`);
       res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' });
       res.end(JSON.stringify({ error: 'rate_limited', retryAfter: 60 }));
       return;
@@ -1586,7 +1820,8 @@ async function handleRequest(req, res) {
       const token = params.get('token');
 
       if (!token || typeof token !== 'string') {
-        console.log('[handoff] No token in POST body');
+        recordHandoffMetric('no_token');
+        handoffLog('NO_TOKEN', 'no token in POST body');
         serveLoginPage(res, 401);
         return;
       }
@@ -1600,7 +1835,8 @@ async function handleRequest(req, res) {
         });
         handoffPayload = payload;
       } catch (jwtErr) {
-        console.log(`[handoff] JWT verification failed: ${jwtErr.code || jwtErr.message}`);
+        recordHandoffMetric('jwt_failed', jwtErr.code || jwtErr.message);
+        handoffLog('JWT_FAILED', `JWT verification failed: ${jwtErr.code || jwtErr.message}`);
         serveLoginPage(res, 401);
         return;
       }
@@ -1608,14 +1844,19 @@ async function handleRequest(req, res) {
       // Validate required claims
       const { sub, fqdn: tokenFqdn, jti } = handoffPayload;
       if (!sub || !tokenFqdn || !jti) {
-        console.log('[handoff] Missing required claims (sub, fqdn, jti)');
+        recordHandoffMetric('jwt_failed', 'missing_claims');
+        handoffLog('JWT_FAILED', 'Missing required claims (sub, fqdn, jti)');
         serveLoginPage(res, 401);
         return;
       }
 
       // Single-use enforcement: check in-memory Map first (fast path only — don't consume yet)
       if (consumedHandoffTokens.has(jti)) {
-        console.log(`[handoff] Token already consumed (in-memory): jti=${jti}`);
+        // POISON-LOOP SIGNATURE: if this fires repeatedly for DISTINCT jti values
+        // after the BACK-IOC-020 fleet-wide deploy, a container is missing
+        // CONSUME_HANDOFF_URL (in-memory fallback active) → rebuild via upgrade-container.
+        recordHandoffMetric('already_consumed_inmem', `jti=${String(jti).slice(0, 8)}…`);
+        handoffLog('ALREADY_CONSUMED_INMEM', `Token already consumed (in-memory): jti=${jti}`);
         serveLoginPage(res, 401);
         return;
       }
@@ -1626,7 +1867,8 @@ async function handleRequest(req, res) {
       const tokenFqdnLower = String(tokenFqdn).toLowerCase();
 
       if (tokenFqdnLower !== expectedFqdn) {
-        console.log(`[handoff] FQDN mismatch: token=${tokenFqdnLower} expected=${expectedFqdn}`);
+        recordHandoffMetric('fqdn_mismatch', `token=${tokenFqdnLower.slice(0, 24)}…`);
+        handoffLog('FQDN_MISMATCH', `FQDN mismatch: token=${tokenFqdnLower} expected=${expectedFqdn}`);
         serveLoginPage(res, 403);
         return;
       }
@@ -1648,19 +1890,22 @@ async function handleRequest(req, res) {
           });
 
           if (!verifyResp.ok) {
-            console.log(`[handoff] verify-owner returned ${verifyResp.status}`);
+            recordHandoffMetric('owner_check_failed', `status=${verifyResp.status}`);
+            handoffLog('OWNER_CHECK_FAILED', `verify-owner returned ${verifyResp.status}`);
             serveLoginPage(res, 403);
             return;
           }
 
           const result = await verifyResp.json();
           if (!result.authorized) {
-            console.log(`[handoff] Owner check failed: sub=${sub} fqdn=${expectedFqdn}`);
+            recordHandoffMetric('owner_check_failed', 'not_authorized');
+            handoffLog('OWNER_CHECK_FAILED', `Owner check failed: sub=${String(sub).slice(0, 16)}… fqdn=${expectedFqdn}`);
             serveLoginPage(res, 403);
             return;
           }
         } catch (fetchErr) {
-          console.error(`[handoff] verify-owner error: ${fetchErr.message}`);
+          recordHandoffMetric('owner_verify_error', String(fetchErr.message).slice(0, 80));
+          handoffLogError('OWNER_VERIFY_ERROR', `verify-owner error: ${fetchErr.message}`);
           serveLoginPage(res, 403);
           return;
         }
@@ -1670,7 +1915,8 @@ async function handleRequest(req, res) {
       const dbResult = await dbConsumeHandoffToken(jti);
       if (!dbResult.consumed) {
         // DB says already consumed or unavailable — fail closed
-        console.log(`[handoff] Token rejected by DB: jti=${jti} reason=${dbResult.error}`);
+        recordHandoffMetric('db_rejected', `${dbResult.error} jti=${String(jti).slice(0, 8)}…`);
+        handoffLog('DB_REJECTED', `Token rejected by DB: jti=${jti} reason=${dbResult.error}`);
         serveLoginPage(res, 401);
         return;
       }
@@ -1682,7 +1928,10 @@ async function handleRequest(req, res) {
       const sessionValue = signSession(sub);
       const cookieOpts = getCookieOptions(req);
 
-      console.log(`[handoff] ✓ SSO handoff successful: sub=${sub} fqdn=${expectedFqdn} jti=${jti}`);
+      // BACK-IOC-016: single success log line, truncated identifiers (legacy
+      // full-sub/jti line removed per Grok IOC-016 R1 log-hygiene finding).
+      handoffLog('SUCCESS', `SSO handoff successful: sub=${String(sub).slice(0, 16)}… fqdn=${expectedFqdn} jti=${String(jti).slice(0, 8)}…`);
+      recordHandoffMetric('success');
 
       res.writeHead(302, {
         'Set-Cookie': cookie.serialize(COOKIE_NAME, sessionValue, cookieOpts),
@@ -1691,7 +1940,8 @@ async function handleRequest(req, res) {
       res.end();
       return;
     } catch (error) {
-      console.error('[handoff] Error:', error.message);
+      recordHandoffMetric('error', String(error.message).slice(0, 80));
+      handoffLogError('ERROR', `Handoff error: ${error.message}`);
       serveLoginPage(res, 500);
       return;
     }
@@ -1762,7 +2012,7 @@ async function handleRequest(req, res) {
   // Inject verified user identity for OpenClaw trusted-proxy mode
   req.headers['x-forwarded-user'] = session.sub;
 
-  proxy.web(req, res);
+  proxyWithBootRetry(req, res);
 }
 
 // ─── WebSocket Upgrade ──────────────────────────────────────────────────────

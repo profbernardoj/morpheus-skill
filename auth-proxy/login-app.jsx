@@ -154,7 +154,10 @@ function App() {
       appId={PRIVY_APP_ID}
       {...(PRIVY_CLIENT_ID ? { clientId: PRIVY_CLIENT_ID } : {})}
       config={{
-        loginMethods: ['wallet', 'google', 'email', 'apple'],
+        // loginMethods intentionally NOT set: the Privy modal follows the app's
+        // dashboard-enabled methods (server-driven), so each vertical's agent
+        // login offers exactly what its Privy app allows. A hardcoded list here
+        // drifted from the dashboards (dead Apple button, missing X/GitHub/Discord).
         externalWallets: {
           ethereum: {
             connectors: ['metaMask', 'walletConnect', 'coinbaseWallet', 'rainbow', 'injected'],
@@ -163,7 +166,7 @@ function App() {
         appearance: {
           theme: 'dark',
           accentColor: '#7c3aed',
-          logo: '/auth/logo.png',
+          logo: '/auth/logo.png?v=20261021',
         },
       }}
     >
